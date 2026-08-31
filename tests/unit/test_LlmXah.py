@@ -1,4 +1,5 @@
 import threading
+import time
 from types import SimpleNamespace
 
 from conversationgenome.llm.llm_xah import LlmXah
@@ -21,6 +22,8 @@ def _llm(create):
     )
     llm.primary_model = PRIMARY
     llm.fallback_model = FALLBACK
+    llm.primary_grace_seconds = 0.05
+    llm.response_deadline_seconds = 0.2
     return llm
 
 
@@ -57,6 +60,48 @@ def test_primary_error_returns_already_running_fallback():
         return _response("fallback result")
 
     assert _llm(create).basic_prompt("prompt") == "fallback result"
+
+
+def test_ready_fallback_wins_after_primary_grace_expires():
+    both_started = threading.Barrier(2)
+    release_primary = threading.Event()
+
+    def create(**kwargs):
+        both_started.wait(timeout=2)
+        if kwargs["model"] == PRIMARY:
+            release_primary.wait(timeout=1)
+            return _response("late primary result")
+        return _response("fallback result")
+
+    llm = _llm(create)
+    started = time.monotonic()
+    try:
+        result = llm.basic_prompt("prompt")
+    finally:
+        release_primary.set()
+
+    assert result == "fallback result"
+    assert time.monotonic() - started < llm.response_deadline_seconds
+
+
+def test_slow_models_cannot_hold_request_past_response_deadline():
+    both_started = threading.Barrier(2)
+    release_models = threading.Event()
+
+    def create(**kwargs):
+        both_started.wait(timeout=2)
+        release_models.wait(timeout=1)
+        return _response(kwargs["model"])
+
+    llm = _llm(create)
+    started = time.monotonic()
+    try:
+        result = llm.basic_prompt("prompt")
+    finally:
+        release_models.set()
+
+    assert result is None
+    assert time.monotonic() - started < 0.5
 
 
 def test_invalid_primary_json_returns_valid_fallback_json():

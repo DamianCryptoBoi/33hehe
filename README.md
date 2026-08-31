@@ -152,8 +152,8 @@ export OPENROUTER_PROVIDER_PREFERENCE=chutes
 #### XAH Concurrent Primary/Fallback Configuration
 
 The `xah` miner backend starts the primary and fallback requests concurrently.
-It returns a non-empty, parseable primary response when available; otherwise it
-uses the already-running fallback response. Both requests consume tokens even
+It gives the primary a short grace period, then returns the first non-empty,
+parseable response before a hard deadline. Both requests consume tokens even
 when the primary succeeds.
 
 ```
@@ -162,6 +162,8 @@ export XAH_API_KEY=your_xah_api_key_here
 export XAH_BASE_URL=https://api.xah.io/v1
 export XAH_PRIMARY_MODEL=deepseek-v4-flash
 export XAH_FALLBACK_MODEL=levuphong2909/gemini-3.5-flash-high
+export XAH_PRIMARY_GRACE_SECONDS=8
+export XAH_RESPONSE_DEADLINE_SECONDS=10
 ```
 
 #### Chutes Configuration

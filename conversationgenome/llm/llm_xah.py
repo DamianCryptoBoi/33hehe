@@ -1,5 +1,9 @@
+from concurrent.futures import FIRST_COMPLETED
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError
+from concurrent.futures import wait
 import json
+import time
 
 from openai import OpenAI
 
@@ -23,6 +27,12 @@ class LlmXah(LlmOpenAI):
             "XAH_FALLBACK_MODEL",
             "levuphong2909/gemini-3.5-flash-high",
         )
+        self.primary_grace_seconds = float(
+            c.get("env", "XAH_PRIMARY_GRACE_SECONDS", "8")
+        )
+        self.response_deadline_seconds = float(
+            c.get("env", "XAH_RESPONSE_DEADLINE_SECONDS", "10")
+        )
         self.model = self.primary_model
         self.embedding_model = "text-embedding-3-small"
 
@@ -30,6 +40,7 @@ class LlmXah(LlmOpenAI):
         params = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
+            "timeout": self.response_deadline_seconds,
         }
         if response_format == "json":
             params["response_format"] = {"type": "json_object"}
@@ -43,6 +54,7 @@ class LlmXah(LlmOpenAI):
         return content
 
     def basic_prompt(self, prompt: str, response_format: str = "text") -> str | None:
+        deadline = time.monotonic() + self.response_deadline_seconds
         executor = ThreadPoolExecutor(max_workers=2)
         primary = executor.submit(
             self._request, self.primary_model, prompt, response_format
@@ -52,14 +64,49 @@ class LlmXah(LlmOpenAI):
         )
 
         try:
+            candidates = [(fallback, "fallback")]
             try:
-                return primary.result()
+                return primary.result(
+                    timeout=min(
+                        self.primary_grace_seconds,
+                        max(0, deadline - time.monotonic()),
+                    )
+                )
+            except TimeoutError:
+                candidates.append((primary, "primary"))
             except Exception as primary_error:
                 print(f"XAH primary model error: {primary_error}")
-                try:
-                    return fallback.result()
-                except Exception as fallback_error:
-                    print(f"XAH fallback model error: {fallback_error}")
+
+            pending = {future for future, _ in candidates if not future.done()}
+            completed = {future for future, _ in candidates if future.done()}
+
+            while completed or pending:
+                for future, label in candidates:
+                    if future not in completed:
+                        continue
+                    completed.remove(future)
+                    try:
+                        return future.result()
+                    except Exception as error:
+                        print(f"XAH {label} model error: {error}")
+
+                if not pending:
                     return None
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+
+                completed, pending = wait(
+                    pending,
+                    timeout=remaining,
+                    return_when=FIRST_COMPLETED,
+                )
+
+                if not completed:
+                    break
+
+            print("XAH response deadline exceeded")
+            return None
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
