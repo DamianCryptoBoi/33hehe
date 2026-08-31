@@ -33,6 +33,9 @@ class LlmXah(LlmOpenAI):
         self.response_deadline_seconds = float(
             c.get("env", "XAH_RESPONSE_DEADLINE_SECONDS", "10")
         )
+        self.long_response_deadline_seconds = float(
+            c.get("env", "XAH_LONG_RESPONSE_DEADLINE_SECONDS", "20")
+        )
         self.model = self.primary_model
         self.embedding_model = "text-embedding-3-small"
 

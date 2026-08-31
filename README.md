@@ -154,7 +154,9 @@ export OPENROUTER_PROVIDER_PREFERENCE=chutes
 The `xah` miner backend starts the primary and fallback requests concurrently.
 It gives the primary a short grace period, then returns the first non-empty,
 parseable response before a hard deadline. Both requests consume tokens even
-when the primary succeeds.
+when the primary succeeds. The ordinary deadline is 10 seconds; the fast
+skill-coverage path uses a 20-second deadline within its 24-second validator
+timeout.
 
 ```
 export LLM_TYPE_OVERRIDE=xah
@@ -164,6 +166,7 @@ export XAH_PRIMARY_MODEL=deepseek-v4-flash
 export XAH_FALLBACK_MODEL=levuphong2909/gemini-3.5-flash-high
 export XAH_PRIMARY_GRACE_SECONDS=8
 export XAH_RESPONSE_DEADLINE_SECONDS=10
+export XAH_LONG_RESPONSE_DEADLINE_SECONDS=20
 ```
 
 #### Chutes Configuration

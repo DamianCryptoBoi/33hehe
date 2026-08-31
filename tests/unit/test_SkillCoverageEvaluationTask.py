@@ -182,5 +182,30 @@ async def test_mine_fast_mode_handles_no_bundle_returned(monkeypatch):
     assert result == {"skill": "", "tdd_plan": "", "section_tests": {}}
 
 
+@pytest.mark.asyncio
+async def test_mine_fast_mode_uses_long_response_deadline(monkeypatch):
+    monkeypatch.setattr(SkillCoverageEvaluationTask, "FAST_MODE", True)
+    task = _make_task()
+
+    class DeadlineAwareLlm:
+        response_deadline_seconds = 10
+        long_response_deadline_seconds = 20
+        observed_deadline = None
+
+        def skill_request_to_skill_bundle(self, seed, section_map):
+            self.observed_deadline = self.response_deadline_seconds
+            return None
+
+    llml = DeadlineAwareLlm()
+    with patch(
+        "conversationgenome.task.SkillCoverageEvaluationTask.get_llm_backend",
+        return_value=llml,
+    ):
+        result = await task.mine()
+
+    assert llml.observed_deadline == 20
+    assert result == {"skill": "", "tdd_plan": "", "section_tests": {}}
+
+
 def test_fast_mode_defaults_to_true():
     assert SkillCoverageEvaluationTask.FAST_MODE is True
