@@ -12,8 +12,13 @@ class LlmOpenAI(LlmLib):
         api_key = c.get('env', "OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set. Please set it in the .env file or as an environment variable.")
-        self.client = OpenAI(api_key=api_key)
+        base_url = None if ignore_model_override else c.get('env', "OPENAI_BASE_URL")
+        client_args = {"api_key": api_key}
+        if base_url:
+            client_args["base_url"] = base_url
+        self.client = OpenAI(**client_args)
         self.model = DEFAULT_MODEL if ignore_model_override else c.get('env', "OPENAI_MODEL", DEFAULT_MODEL)
+        self.use_configured_model_only = bool(base_url)
         self.embedding_model = "text-embedding-3-small"
 
 
@@ -21,13 +26,12 @@ class LlmOpenAI(LlmLib):
     ################################## Abstract methods override ##################################
     ###############################################################################################
     def basic_prompt(self, prompt: str, response_format: str = "text") -> str|None:
-        api_format = {"type": "json_object"} if response_format == "json" else None
-        
         completion_params = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "response_format": api_format,
         }
+        if response_format == "json":
+            completion_params["response_format"] = {"type": "json_object"}
         # The installed openai SDK (1.30.3) predates first-class typed support
         # for reasoning_effort/service_tier and rejects them as unexpected
         # kwargs if passed directly -- extra_body merges them straight into
@@ -128,4 +132,3 @@ class LlmOpenAI(LlmLib):
     @model_override('gpt-5.6-luna')
     def judge_section_tests(self, skill_markdown, section_map, section_tests):
         return super().judge_section_tests(skill_markdown, section_map, section_tests)
-

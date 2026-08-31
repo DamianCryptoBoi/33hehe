@@ -4,7 +4,12 @@ from conversationgenome.ConfigLib import c
 from conversationgenome.llm.LlmLib import LlmLib
 
 LOCKED_LLM_TYPE = "openai"
-_OVERRIDE_ENV_VARS = ["LLM_TYPE_OVERRIDE", "OPENAI_MODEL", "OPENAI_EMBEDDINGS_MODEL_OVERRIDE"]
+_OVERRIDE_ENV_VARS = [
+    "LLM_TYPE_OVERRIDE",
+    "OPENAI_MODEL",
+    "OPENAI_BASE_URL",
+    "OPENAI_EMBEDDINGS_MODEL_OVERRIDE",
+]
 
 
 def _present_llm_override_vars() -> list[str]:
@@ -68,9 +73,5 @@ def get_llm_backend(llm_type_override=None) -> LlmLib:
         from .llm_chutes import LlmChutes
         return LlmChutes()
 
-    elif llm_type_override == "xah":
-        from .llm_xah import LlmXah
-        return LlmXah()
-    
     else:
         raise ValueError(f"Unsupported LLM_PROVIDER: {llm_type_override}")

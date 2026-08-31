@@ -133,7 +133,6 @@ If you wish to use a provider other than OpenAI, you select your LLM Override by
 #export LLM_TYPE_OVERRIDE=anthropic
 #export LLM_TYPE_OVERRIDE=openrouter
 #export LLM_TYPE_OVERRIDE=chutes
-#export LLM_TYPE_OVERRIDE=xah
 ```
 
 Please ensure you only have one `LLM_TYPE_OVERRIDE` config parameter uncommented before moving on. Once you have selected the `LLM_TYPE`, follow prompts in the .env file to fill in required fields for your override LLM provider.
@@ -149,24 +148,17 @@ export OPENROUTER_MODEL=deepseek/deepseek-chat
 export OPENROUTER_PROVIDER_PREFERENCE=chutes
 ```
 
-#### XAH Concurrent Primary/Fallback Configuration
+#### OpenAI-Compatible API Configuration
 
-The `xah` miner backend starts the primary and fallback requests concurrently.
-It gives the primary a short grace period, then returns the first non-empty,
-parseable response before a hard deadline. Both requests consume tokens even
-when the primary succeeds. The ordinary deadline is 10 seconds; the fast
-skill-coverage path uses a 20-second deadline within its 24-second validator
-timeout.
+The stock OpenAI miner can use any OpenAI-compatible chat-completions endpoint.
+When `OPENAI_BASE_URL` is set, all task-specific model, reasoning-effort, and
+service-tier overrides are disabled so every request uses `OPENAI_MODEL`.
 
 ```
-export LLM_TYPE_OVERRIDE=xah
-export XAH_API_KEY=your_xah_api_key_here
-export XAH_BASE_URL=https://api.xah.io/v1
-export XAH_PRIMARY_MODEL=deepseek-v4-flash
-export XAH_FALLBACK_MODEL=levuphong2909/gemini-3.5-flash-high
-export XAH_PRIMARY_GRACE_SECONDS=8
-export XAH_RESPONSE_DEADLINE_SECONDS=10
-export XAH_LONG_RESPONSE_DEADLINE_SECONDS=20
+export LLM_TYPE_OVERRIDE=openai
+export OPENAI_API_KEY=your_provider_api_key_here
+export OPENAI_BASE_URL=https://api.xah.io/v1
+export OPENAI_MODEL=deepseek-v4-flash
 ```
 
 #### Chutes Configuration

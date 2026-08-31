@@ -436,6 +436,8 @@ def model_override(model_name: str):
     def decorator_model_override(func):
         @functools.wraps(func)
         def wrapper(self: LlmLib, *args, **kwargs):
+            if getattr(self, "use_configured_model_only", False):
+                return func(self, *args, **kwargs)
             default_model = self.model
             self.model = model_name
             try:
@@ -464,6 +466,8 @@ def reasoning_effort_override(effort: str):
     def decorator_reasoning_effort_override(func):
         @functools.wraps(func)
         def wrapper(self: LlmLib, *args, **kwargs):
+            if getattr(self, "use_configured_model_only", False):
+                return func(self, *args, **kwargs)
             default_effort = self.reasoning_effort
             self.reasoning_effort = effort
             try:
@@ -478,6 +482,8 @@ def service_tier_override(tier: str):
     def decorator_service_tier_override(func):
         @functools.wraps(func)
         def wrapper(self: LlmLib, *args, **kwargs):
+            if getattr(self, "use_configured_model_only", False):
+                return func(self, *args, **kwargs)
             default_tier = self.service_tier
             self.service_tier = tier
             try:

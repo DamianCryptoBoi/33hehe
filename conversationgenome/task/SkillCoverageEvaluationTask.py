@@ -77,10 +77,6 @@ class SkillCoverageEvaluationTask(Task):
         return output
 
     def _mine_fast(self, llml, seed, section_map) -> dict:
-        long_deadline = getattr(llml, "long_response_deadline_seconds", None)
-        if isinstance(long_deadline, (int, float)):
-            llml.response_deadline_seconds = long_deadline
-
         bundle = llml.skill_request_to_skill_bundle(seed, section_map)
         if not bundle:
             return {"skill": "", "tdd_plan": "", "section_tests": {}}

@@ -23,7 +23,12 @@ def test_present_llm_override_vars_none_set(mock_c):
 
 @patch("conversationgenome.llm.llm_factory.c")
 def test_present_llm_override_vars_each_detected(mock_c):
-    for var in ["LLM_TYPE_OVERRIDE", "OPENAI_MODEL", "OPENAI_EMBEDDINGS_MODEL_OVERRIDE"]:
+    for var in [
+        "LLM_TYPE_OVERRIDE",
+        "OPENAI_MODEL",
+        "OPENAI_BASE_URL",
+        "OPENAI_EMBEDDINGS_MODEL_OVERRIDE",
+    ]:
         mock_c.get.side_effect = _c_get({("env", var): "some-value"})
         assert _present_llm_override_vars() == [var]
 
@@ -92,12 +97,16 @@ def test_configure_lockdown_testnet_no_override_no_warning(mock_c, mock_bt):
 @patch("conversationgenome.llm.llm_factory.c")
 def test_get_llm_backend_locked_forces_openai_ignoring_explicit_override(mock_factory_c, mock_openai_c, mock_openai_client):
     mock_factory_c.get.side_effect = _c_get({("system", "llm_overrides_locked"): True})
-    mock_openai_c.get.side_effect = _c_get({("env", "OPENAI_API_KEY"): "test-key"})
+    mock_openai_c.get.side_effect = _c_get({
+        ("env", "OPENAI_API_KEY"): "test-key",
+        ("env", "OPENAI_BASE_URL"): "https://api.xah.io/v1",
+    })
 
     llm = get_llm_backend(llm_type_override="anthropic")
 
     assert isinstance(llm, LlmOpenAI)
     assert llm.model == "gpt-5.2"
+    mock_openai_client.assert_called_once_with(api_key="test-key")
 
 
 @patch("conversationgenome.llm.llm_openai.OpenAI")
@@ -134,15 +143,3 @@ def test_get_llm_backend_never_locked_for_miner_process(mock_c):
         llm = get_llm_backend()
 
         assert isinstance(llm, LlmOpenRouter)
-
-
-@patch("conversationgenome.llm.llm_factory.c")
-def test_get_llm_backend_supports_xah_for_miners(mock_c):
-    mock_c.get.side_effect = _c_get({("system", "llm_overrides_locked"): False})
-
-    with patch.dict("os.environ", {"XAH_API_KEY": "test-key"}):
-        llm = get_llm_backend(llm_type_override="xah")
-
-    from conversationgenome.llm.llm_xah import LlmXah
-
-    assert isinstance(llm, LlmXah)
