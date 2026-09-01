@@ -54,6 +54,7 @@ class LlmVertex(LlmLib):
 
         attempts = 2 if response_format == "json" else 1
         for _ in range(attempts):
+            response = None
             try:
                 response = self.client.post(
                     self._model_url(self.model, "generateContent"),
@@ -68,8 +69,16 @@ class LlmVertex(LlmLib):
                 response.raise_for_status()
                 parts = response.json()["candidates"][0]["content"]["parts"]
                 content = "".join(part.get("text", "") for part in parts)
-            except Exception:
-                print("Vertex Completion Error")
+            except Exception as e:
+                error_response = getattr(e, "response", None)
+                if error_response is None:
+                    error_response = response
+                status = getattr(error_response, "status_code", None)
+                body = (getattr(error_response, "text", "") or "").replace("\n", " ")
+                print(
+                    f"Vertex Completion Error: {type(e).__name__}: {e}; "
+                    f"status={status}; body={body[:1000]}"
+                )
                 return None
 
             if response_format != "json":

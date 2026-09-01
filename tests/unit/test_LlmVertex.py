@@ -7,9 +7,11 @@ from conversationgenome.api.models.skill_coverage import SectionMapEntry
 
 
 class FakeResponse:
-    def __init__(self, body=None, error=None):
+    def __init__(self, body=None, error=None, status_code=200, text=""):
         self.body = body or {}
         self.error = error
+        self.status_code = status_code
+        self.text = text
 
     def raise_for_status(self):
         if self.error:
@@ -26,7 +28,10 @@ class FakeSession:
 
     def post(self, url, **kwargs):
         self.posts.append((url, kwargs))
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def load_vertex_module():
@@ -289,13 +294,57 @@ def test_json_prompt_retries_malformed_response(monkeypatch):
     assert len(session.posts) == 2
 
 
-def test_basic_prompt_returns_none_on_vertex_error(monkeypatch):
+def test_basic_prompt_logs_vertex_exception_details(monkeypatch, capsys):
     module = load_vertex_module()
-    session = FakeSession(FakeResponse(error=RuntimeError("unavailable")))
+    session = FakeSession(RuntimeError("unavailable"))
     configure_vertex(monkeypatch, module, session)
     llm = module.LlmVertex()
 
     assert llm.basic_prompt("Tag this conversation") is None
+    assert (
+        "Vertex Completion Error: RuntimeError: unavailable; status=None; body="
+        in capsys.readouterr().out
+    )
+
+
+def test_basic_prompt_logs_response_when_vertex_shape_is_unexpected(
+    monkeypatch, capsys
+):
+    module = load_vertex_module()
+    session = FakeSession(
+        FakeResponse(
+            body={"promptFeedback": {"blockReason": "SAFETY"}},
+            status_code=200,
+            text='{"promptFeedback":{"blockReason":"SAFETY"}}',
+        )
+    )
+    configure_vertex(monkeypatch, module, session)
+    llm = module.LlmVertex()
+
+    assert llm.basic_prompt("Tag this webpage") is None
+    assert (
+        "Vertex Completion Error: KeyError: 'candidates'; status=200; "
+        'body={"promptFeedback":{"blockReason":"SAFETY"}}'
+        in capsys.readouterr().out
+    )
+
+
+def test_basic_prompt_caps_logged_vertex_body(monkeypatch, capsys):
+    module = load_vertex_module()
+    session = FakeSession(
+        FakeResponse(
+            body={"promptFeedback": {}},
+            status_code=200,
+            text="x" * 1000 + "not-logged",
+        )
+    )
+    configure_vertex(monkeypatch, module, session)
+    llm = module.LlmVertex()
+
+    assert llm.basic_prompt("Tag this webpage") is None
+    output = capsys.readouterr().out
+    assert "x" * 1000 in output
+    assert "not-logged" not in output
 
 
 def test_embeddings_use_vertex_with_compatible_dimensions(monkeypatch):
