@@ -73,5 +73,9 @@ def get_llm_backend(llm_type_override=None) -> LlmLib:
         from .llm_chutes import LlmChutes
         return LlmChutes()
 
+    elif llm_type_override == "vertex":
+        from .llm_vertex import LlmVertex
+        return LlmVertex()
+
     else:
         raise ValueError(f"Unsupported LLM_PROVIDER: {llm_type_override}")

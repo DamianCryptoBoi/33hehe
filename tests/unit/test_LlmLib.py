@@ -131,6 +131,24 @@ def test_survey_to_metadata(mock_llm):
         assert result.tags == ["tag1", "tag2"]
 
 
+def test_survey_to_metadata_can_skip_embeddings(mock_llm):
+    with patch('conversationgenome.llm.prompt_manager.prompt_manager.survey_tag_prompt') as mock_prompt_mgr, \
+         patch.object(Utils, 'clean_tags') as mock_clean_tags:
+        mock_prompt_mgr.return_value = "prompt"
+        mock_llm.basic_prompt_responses = {"prompt": "tag1,tag2"}
+        mock_clean_tags.return_value = ["tag1", "tag2"]
+        mock_llm.get_vector_embeddings_set = lambda tags: (_ for _ in ()).throw(
+            AssertionError("miner requested embeddings")
+        )
+
+        result = mock_llm.survey_to_metadata(
+            "question", "comment", generateEmbeddings=False
+        )
+
+        assert result.tags == ["tag1", "tag2"]
+        assert result.vectors is None
+
+
 def test_validate_conversation_quality(mock_llm):
     with patch.object(Utils, 'generate_convo_xml') as mock_xml, \
          patch('conversationgenome.llm.prompt_manager.prompt_manager.conversation_quality_prompt') as mock_prompt_mgr:

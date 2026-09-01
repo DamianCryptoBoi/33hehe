@@ -19,6 +19,11 @@ async def test_mine_returns_expected_tags_and_vectors():
         result = await task.mine()
         assert result["tags"] == ["greeting"]
         assert result["vectors"] == [[0.1, 0.2]]
+        mock_llml.survey_to_metadata.assert_called_once_with(
+            task.input.data.survey_question,
+            task.input.data.comment,
+            generateEmbeddings=False,
+        )
 
 
 @pytest.mark.asyncio

@@ -110,7 +110,7 @@ nano .env
 
 **Please follow all instructions in the .env**
 
-LLM utilization is required in this subnet to annotate raw data. As a miner or validator, GPT-4o is the default LLM used for all operations. If you wish to override this default selection, you can follow override instructions below or in your `.env` file. After completing the steps in [Configuration](#Configuration), you can open up your `.env` file, and view the options. Currently, we offer out-of-the-box configuration for OpenAI, Anthropic, and groq APIs. 
+LLM utilization is required in this subnet to annotate raw data. As a miner or validator, GPT-4o is the default LLM used for all operations. If you wish to override this default selection, you can follow override instructions below or in your `.env` file. After completing the steps in [Configuration](#Configuration), you can open up your `.env` file, and view the options. Currently, we offer out-of-the-box configuration for OpenAI, Anthropic, Groq, OpenRouter, Chutes, and Google Vertex AI.
 
 To change the default OpenAI Model used by your miner or validator, you first must uncomment `LLM_TYPE_OVERRIDE=openai` and the select your model using the `OPENAI_MODEL` parameter in the .env:
 
@@ -133,6 +133,7 @@ If you wish to use a provider other than OpenAI, you select your LLM Override by
 #export LLM_TYPE_OVERRIDE=anthropic
 #export LLM_TYPE_OVERRIDE=openrouter
 #export LLM_TYPE_OVERRIDE=chutes
+#export LLM_TYPE_OVERRIDE=vertex
 ```
 
 Please ensure you only have one `LLM_TYPE_OVERRIDE` config parameter uncommented before moving on. Once you have selected the `LLM_TYPE`, follow prompts in the .env file to fill in required fields for your override LLM provider.
@@ -170,6 +171,26 @@ If you selected `LLM_TYPE_OVERRIDE=chutes`, you'll need to provide a `CHUTES_API
 export CHUTES_API_KEY=your_chutes_api_key_here
 export CHUTES_MODEL=deepseek-ai/DeepSeek-V3
 ```
+
+#### Google Vertex AI Configuration
+
+The Vertex backend uses Application Default Credentials (ADC), so it does not
+need an API key. Authenticate once, select the provider, and set your project:
+
+```console
+gcloud auth application-default login
+gcloud services enable aiplatform.googleapis.com
+export LLM_TYPE_OVERRIDE=vertex
+export GOOGLE_CLOUD_PROJECT=your-google-cloud-project
+export GOOGLE_CLOUD_LOCATION=global
+export VERTEX_MODEL=gemini-3.6-flash
+```
+
+`GOOGLE_CLOUD_LOCATION` defaults to `global`, and `VERTEX_MODEL` defaults to
+`gemini-3.6-flash` when omitted. Vertex uses `MINIMAL` thinking for the standard
+12-second tasks and `LOW` thinking for the more involved 24-second skill
+coverage task. Billing and the Vertex AI API must be enabled for the selected
+project.
 
 
 ### Running the Tests

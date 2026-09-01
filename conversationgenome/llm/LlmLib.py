@@ -170,7 +170,7 @@ class LlmLib(ABC):
         return RawMetadata(tags=tags, vectors=vectors, success=True)
 
 
-    def survey_to_metadata(self, survey_question: str, comment:str) -> RawMetadata|None:
+    def survey_to_metadata(self, survey_question: str, comment: str, generateEmbeddings=True) -> RawMetadata|None:
         prompt = prompt_manager.survey_tag_prompt(survey_question, comment)
         response_content = self.basic_prompt(prompt)
         if not isinstance(response_content, str):
@@ -178,7 +178,7 @@ class LlmLib(ABC):
             return None
         try:
             tags = Utils.clean_tags(response_content.split(","))
-            vectors = self.get_vector_embeddings_set(tags)
+            vectors = self.get_vector_embeddings_set(tags) if generateEmbeddings else None
         except Exception as e:
             print("Error: Error generating vectors")
             return None
