@@ -25,6 +25,16 @@ class PromptManager:
             entities_str += f"Set {i} :\n{','.join(named_entities[i])}\n\n"
         return self._get("combine_named_entities_prompt.j2", entities_str=entities_str)
 
+    def combine_metadata_tags_prompt(self, metadata_tags: list[list]) -> str:
+        tag_sets = []
+        for index, tags in enumerate(metadata_tags):
+            source = "primary content" if index == 0 else f"enrichment {index}"
+            tag_sets.append(f"{source}: {','.join(tags)}")
+        return self._get(
+            "combine_metadata_tags.j2",
+            tag_sets_text="\n".join(tag_sets),
+        )
+
     def conversation_to_metadata_prompt(self, conversation_to_analyze: str) -> str:
         if not conversation_to_analyze.strip():
             raise ValueError("conversation_to_analyze cannot be empty.")

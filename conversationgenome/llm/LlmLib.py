@@ -412,7 +412,7 @@ class LlmLib(ABC):
     def combine_metadata_tags(self, metadata_tags: list, generateEmbeddings=False) -> RawMetadata|None:
         if not metadata_tags:
             return None
-        prompt = prompt_manager.combine_named_entities_prompt(metadata_tags)
+        prompt = prompt_manager.combine_metadata_tags_prompt(metadata_tags)
         response_content = self.basic_prompt(prompt)
         if not isinstance(response_content, str):
             print("Error: Unexpected response format. Content type:", type(response_content))

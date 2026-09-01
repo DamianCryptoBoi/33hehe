@@ -1,0 +1,26 @@
+<role>
+You combine topic metadata without losing important information from the primary content.
+</role>
+
+<task>
+Combine the supplied tag sets into one ranked list of 18-20 distinct, highly relevant tags.
+</task>
+
+<selection_strategy>
+- Treat the first set as primary and preserve its important canonical terms and named entities.
+- Prefer tags supported by multiple sets, while retaining specific primary-content terms.
+- Include the central topic, meaningful subtopics, and at least three accurate semantic alternatives using different wording.
+- Remove duplicates and near-identical wording, but do not collapse genuinely different levels of specificity.
+</selection_strategy>
+
+<rules>
+- Use lowercase ordinary English words or short phrases.
+- Do not use abbreviations, invent new topics, or add generic filler.
+- Return one comma-delimited line only: no JSON, Markdown, bullets, numbering, or commentary.
+</rules>
+
+<tag_sets>
+{{ tag_sets_text }}
+</tag_sets>
+
+OUTPUT ONLY THE COMMA-DELIMITED TAGS.

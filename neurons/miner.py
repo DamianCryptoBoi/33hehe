@@ -15,8 +15,10 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import os
 import time
 import typing
+from pathlib import Path
 
 # Bittensor
 import bittensor as bt
@@ -24,6 +26,7 @@ import bittensor as bt
 from conversationgenome.base.miner import BaseMinerNeuron
 from conversationgenome.ConfigLib import c
 from conversationgenome.miner.MinerLib import MinerLib
+from conversationgenome.miner.tracking import RequestTracker
 from conversationgenome.protocol import CgSynapse
 from conversationgenome.task import Task
 from conversationgenome.task.task_factory import parse_task
@@ -36,6 +39,22 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
         c.set("system", "netuid", self.config.netuid)
+        self.request_tracker = None
+        tracking_enabled = os.getenv("MINER_TRACKING_ENABLED", "1").lower() not in {
+            "0",
+            "false",
+            "no",
+        }
+        if tracking_enabled:
+            db_path = os.getenv(
+                "MINER_TRACKING_DB",
+                str(Path.home() / ".bittensor" / "miner_requests.sqlite3"),
+            )
+            try:
+                self.request_tracker = RequestTracker(db_path)
+                bt.logging.info(f"Miner request tracking enabled: {db_path}")
+            except Exception as error:
+                bt.logging.warning(f"Could not initialize miner request tracking: {error}")
 
     async def forward(self, synapse: CgSynapse) -> CgSynapse:
         """
@@ -49,15 +68,69 @@ class Miner(BaseMinerNeuron):
 
         """
         ml = MinerLib()
-
+        result = {}
+        error = None
+        request_id = None
         try:
-            task: Task = parse_task(synapse.cgp_input[0]["task"])
+            cgp_input = synapse.cgp_input
+            if not cgp_input or not isinstance(cgp_input[0], dict):
+                raise ValueError("cgp_input must contain a task object")
+            raw_task = cgp_input[0].get("task", {})
+        except Exception as extraction_error:
+            error = extraction_error
+            raw_task = getattr(synapse, "cgp_input", None)
+        task_details = raw_task if isinstance(raw_task, dict) else {}
+        validator_hotkey = getattr(
+            getattr(synapse, "dendrite", None), "hotkey", None
+        )
 
-            bt.logging.info(f"Miner received task of type {task.type}")
-            result = await ml.do_mining(task=task)
-        except Exception as e:
-            bt.logging.error(f"Error extracting task from synapse")
-            
+        validator_uid = None
+        try:
+            validator_uid = self.metagraph.hotkeys.index(validator_hotkey)
+        except (AttributeError, ValueError):
+            pass
+
+        miner_hotkey = getattr(getattr(self, "wallet", None), "hotkey", None)
+        miner_hotkey = getattr(miner_hotkey, "ss58_address", None)
+        miner_uid = getattr(self, "uid", None)
+
+        if self.request_tracker:
+            try:
+                request_id = self.request_tracker.start_request(
+                    validator_hotkey=validator_hotkey,
+                    validator_uid=validator_uid,
+                    miner_hotkey=miner_hotkey,
+                    miner_uid=miner_uid,
+                    task_type=task_details.get("type"),
+                    task_timeout=task_details.get("timeout", 12),
+                    task_payload=raw_task,
+                )
+            except Exception as tracking_error:
+                bt.logging.warning(f"Could not record miner request: {tracking_error}")
+
+        if error is None:
+            try:
+                task: Task = parse_task(raw_task)
+
+                bt.logging.info(f"Miner received task of type {task.type}")
+                result = await ml.do_mining(task=task)
+            except Exception as processing_error:
+                error = processing_error
+        if error:
+            bt.logging.error(f"Error processing task from synapse: {error}")
+
+        if request_id:
+            try:
+                finish_kwargs = {
+                    "answer": result,
+                    "status": "error" if error else "success",
+                }
+                if error:
+                    finish_kwargs["error"] = str(error)
+                self.request_tracker.finish_request(request_id, **finish_kwargs)
+            except Exception as tracking_error:
+                bt.logging.warning(f"Could not finish miner request record: {tracking_error}")
+
         synapse.cgp_output = [result]
         return synapse
 
