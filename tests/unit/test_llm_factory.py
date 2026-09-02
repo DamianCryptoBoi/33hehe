@@ -127,6 +127,25 @@ def test_get_llm_backend_unlocked_honors_override(mock_factory_c, mock_openai_c,
     assert isinstance(llm, LlmOpenAI)
 
 
+@patch("conversationgenome.llm.llm_openai.OpenAI")
+@patch("conversationgenome.llm.llm_openai.c")
+@patch("conversationgenome.llm.llm_factory.c")
+def test_get_llm_backend_passes_request_timeout_to_openai(mock_factory_c, mock_openai_c, mock_openai_client):
+    mock_factory_c.get.side_effect = _c_get({
+        ("system", "llm_overrides_locked"): False,
+        ("env", "LLM_TYPE_OVERRIDE"): None,
+    })
+    mock_openai_c.get.side_effect = _c_get({("env", "OPENAI_API_KEY"): "test-key"})
+
+    get_llm_backend(request_timeout=22)
+
+    mock_openai_client.assert_called_once_with(
+        api_key="test-key",
+        timeout=22,
+        max_retries=0,
+    )
+
+
 @patch("conversationgenome.llm.llm_factory.c")
 def test_get_llm_backend_never_locked_for_miner_process(mock_c):
     """Miners never call configure_llm_override_lockdown, so the flag defaults to False

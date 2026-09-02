@@ -41,21 +41,21 @@ def configure_llm_override_lockdown(netuid: int) -> bool:
     return is_mainnet
 
 
-def get_llm_backend(llm_type_override=None) -> LlmLib:
+def get_llm_backend(llm_type_override=None, request_timeout=None) -> LlmLib:
     """
     Factory function to return the specific LLM implementation
     based on the LLM_PROVIDER environment variable.
     """
     if c.get("system", "llm_overrides_locked", False):
         from .llm_openai import LlmOpenAI
-        return LlmOpenAI(ignore_model_override=True)
+        return LlmOpenAI(ignore_model_override=True, request_timeout=request_timeout)
 
     if not llm_type_override:
         llm_type_override = c.get("env", "LLM_TYPE_OVERRIDE")
 
     if llm_type_override == "openai" or not llm_type_override:
         from .llm_openai import LlmOpenAI
-        return LlmOpenAI()
+        return LlmOpenAI(request_timeout=request_timeout)
     
     elif llm_type_override == "anthropic":
         from .llm_anthropic import LlmAnthropic

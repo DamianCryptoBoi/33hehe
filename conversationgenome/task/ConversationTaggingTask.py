@@ -31,7 +31,7 @@ class ConversationTaggingTask(Task):
     input: Optional[ConversationTaskInput] = None
 
     async def mine(self) -> dict[str, list]:
-        llml = get_llm_backend()
+        llml = get_llm_backend(request_timeout=self.timeout - 2)
 
         try:
             conversation = Conversation(

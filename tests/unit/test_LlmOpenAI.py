@@ -99,6 +99,25 @@ def test_custom_base_url_uses_configured_model_for_skill_requests(mock_c, mock_o
 
 @patch("conversationgenome.llm.llm_openai.OpenAI")
 @patch("conversationgenome.llm.llm_openai.c")
+def test_request_timeout_is_passed_to_openai_client(mock_c, mock_openai):
+    mock_c.get.side_effect = _c_get({
+        ("env", "OPENAI_API_KEY"): "test-key",
+        ("env", "OPENAI_BASE_URL"): "https://api.xah.io/v1",
+        ("env", "OPENAI_MODEL"): "gpt-5.4",
+    })
+
+    LlmOpenAI(request_timeout=22)
+
+    mock_openai.assert_called_once_with(
+        api_key="test-key",
+        base_url="https://api.xah.io/v1",
+        timeout=22,
+        max_retries=0,
+    )
+
+
+@patch("conversationgenome.llm.llm_openai.OpenAI")
+@patch("conversationgenome.llm.llm_openai.c")
 def test_text_prompt_omits_response_format_for_compatible_endpoints(mock_c, mock_openai):
     mock_c.get.side_effect = _c_get({
         ("env", "OPENAI_API_KEY"): "test-key",

@@ -36,9 +36,10 @@ async def test_mine_returns_expected_tags():
     mock_llml.raw_transcript_to_named_entities = Mock(return_value=mock_result)
     mock_llml.enrichment_to_NER = Mock(return_value=mock_result)
 
-    with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
+    with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml) as mock_get_llm:
         result = await task.mine()
 
+        mock_get_llm.assert_called_once_with(request_timeout=10)
         assert result["tags"] == ["John Smith", "Apple Inc", "New York"]
         # Verify the transcript was constructed correctly
         mock_llml.raw_transcript_to_named_entities.assert_called_once_with("John Smith works at Apple Inc.", generateEmbeddings=False)

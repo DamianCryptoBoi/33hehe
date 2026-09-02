@@ -50,9 +50,10 @@ async def test_mine_returns_tags_and_vectors():
     skill_result.vectors = None
     mock_llml.skill_to_metadata = Mock(return_value=skill_result)
 
-    with patch("conversationgenome.task.SkillGenerationTask.get_llm_backend", return_value=mock_llml):
+    with patch("conversationgenome.task.SkillGenerationTask.get_llm_backend", return_value=mock_llml) as mock_get_llm:
         result = await task.mine()
 
+    mock_get_llm.assert_called_once_with(request_timeout=10)
     assert result["tags"] == ["docx", "parsing"]
     assert result["vectors"] is None
     mock_llml.skill_to_metadata.assert_called_once_with(

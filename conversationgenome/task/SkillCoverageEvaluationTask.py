@@ -41,7 +41,7 @@ class SkillCoverageEvaluationTask(Task):
     FAST_MODE: ClassVar[bool] = True
 
     async def mine(self) -> dict:
-        llml = get_llm_backend()
+        llml = get_llm_backend(request_timeout=self.timeout - 2)
 
         try:
             seed = self.input.data.seed

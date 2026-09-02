@@ -21,7 +21,7 @@ class SurveyTaggingTask(Task):
 
     async def mine(self) -> dict[str, list]:
         try:
-            llml = get_llm_backend()
+            llml = get_llm_backend(request_timeout=self.timeout - 2)
             res = llml.survey_to_metadata(
                 self.input.data.survey_question,
                 self.input.data.comment,

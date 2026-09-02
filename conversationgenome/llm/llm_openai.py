@@ -13,14 +13,14 @@ TRANSIENT_ERROR_NAMES = {"APIConnectionError", "APITimeoutError", "RateLimitErro
 
 
 class LlmOpenAI(LlmLib):
-    def __init__(self, ignore_model_override: bool = False):
+    def __init__(self, ignore_model_override: bool = False, request_timeout: float | None = None):
         api_key = c.get('env', "OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set. Please set it in the .env file or as an environment variable.")
         base_url = None if ignore_model_override else c.get('env', "OPENAI_BASE_URL")
         client_args = {
             "api_key": api_key,
-            "timeout": REQUEST_TIMEOUT_SECONDS,
+            "timeout": request_timeout if request_timeout is not None else REQUEST_TIMEOUT_SECONDS,
             "max_retries": 0,
         }
         if base_url:

@@ -66,13 +66,14 @@ async def test_mine_returns_skill_plan_and_section_tests(monkeypatch):
         success=True,
     ))
 
-    with patch("conversationgenome.task.SkillCoverageEvaluationTask.get_llm_backend", return_value=mock_llml):
+    with patch("conversationgenome.task.SkillCoverageEvaluationTask.get_llm_backend", return_value=mock_llml) as mock_get_llm:
         result = await task.mine()
 
     assert result["skill"] == "# Slugify Text\n\nSteps..."
     assert result["tdd_plan"] == "Verify each stage independently."
     assert result["section_tests"]["s1"] == [{"name": "test_lowercases", "description": "slugify lowercases input", "assertion": "slugify('Hello World') == 'hello-world'"}]
     assert result["section_tests"]["s2"] == [{"name": "test_empty_input", "description": "slugify handles empty input", "assertion": "slugify('') == 'n-a'"}]
+    mock_get_llm.assert_called_once_with(request_timeout=22)
 
     mock_llml.skill_request_to_skill.assert_called_once_with(task.input.data.seed, task.input.data.section_map)
     mock_llml.skill_to_tdd_plan.assert_called_once_with("# Slugify Text\n\nSteps...", task.input.data.section_map)

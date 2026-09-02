@@ -15,8 +15,9 @@ async def test_mine_returns_expected_tags_and_vectors():
     mock_result.tags = ["greeting"]
     mock_result.vectors = [[0.1, 0.2]]
     mock_llml.survey_to_metadata = Mock(return_value=mock_result)
-    with patch("conversationgenome.task.SurveyTaggingTask.get_llm_backend", return_value = mock_llml):
+    with patch("conversationgenome.task.SurveyTaggingTask.get_llm_backend", return_value = mock_llml) as mock_get_llm:
         result = await task.mine()
+        mock_get_llm.assert_called_once_with(request_timeout=10)
         assert result["tags"] == ["greeting"]
         assert result["vectors"] == [[0.1, 0.2]]
         mock_llml.survey_to_metadata.assert_called_once_with(
