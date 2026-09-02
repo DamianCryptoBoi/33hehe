@@ -1,3 +1,5 @@
+import threading
+import time
 from unittest.mock import MagicMock, Mock
 from unittest.mock import patch
 
@@ -77,17 +79,12 @@ async def test_mine_handles_exception_from_llmlib_raises_error():
 
 
 @pytest.mark.asyncio
-async def test_mine_uses_validator_aligned_enrichment_and_named_entity_combiner():
+async def test_mine_uses_validator_aligned_enrichment_and_merges_locally():
     mock_llml = MagicMock()
     primary_result = Mock(tags=["east german military"], vectors=None)
     enrichment_result = Mock(tags=["united states congress"], vectors=None)
-    combined_result = Mock(
-        tags=["east german military", "united states congress"],
-        vectors=None,
-    )
     mock_llml.conversation_to_metadata.return_value = primary_result
     mock_llml.enrichment_to_metadata.return_value = enrichment_result
-    mock_llml.combine_named_entities.return_value = combined_result
 
     with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
         task = DummyData.conversation_tagging_task()
@@ -101,10 +98,7 @@ async def test_mine_uses_validator_aligned_enrichment_and_named_entity_combiner(
         input_categories=task.input.input_categories,
         validator_aligned=True,
     )
-    mock_llml.combine_named_entities.assert_called_once_with(
-        [["east german military"], ["united states congress"]],
-        generateEmbeddings=False,
-    )
+    mock_llml.combine_named_entities.assert_not_called()
     mock_llml.combine_metadata_tags.assert_not_called()
     assert result == {
         "tags": ["east german military", "united states congress"],
@@ -113,7 +107,7 @@ async def test_mine_uses_validator_aligned_enrichment_and_named_entity_combiner(
 
 
 @pytest.mark.asyncio
-async def test_mine_preserves_all_extracted_tags_when_combination_fails():
+async def test_mine_preserves_all_extracted_tags_without_combination():
     mock_llml = MagicMock()
     mock_llml.conversation_to_metadata.return_value = Mock(
         tags=["east german military", "bernd schwipper"], vectors=None
@@ -121,8 +115,6 @@ async def test_mine_preserves_all_extracted_tags_when_combination_fails():
     mock_llml.enrichment_to_metadata.return_value = Mock(
         tags=["united states congress", "bernd schwipper"], vectors=None
     )
-    mock_llml.combine_named_entities.return_value = None
-
     with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
         task = DummyData.conversation_tagging_task()
         task.input.data.enrichment_lines = [(0, "United States Congress")]
@@ -132,3 +124,36 @@ async def test_mine_preserves_all_extracted_tags_when_combination_fails():
         "tags": ["east german military", "bernd schwipper", "united states congress"],
         "vectors": None,
     }
+    mock_llml.combine_named_entities.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mine_runs_primary_and_enrichment_extractions_concurrently():
+    task = DummyData.conversation_tagging_task()
+    task.input.data.enrichment_lines = [(0, "United States Congress")]
+    mock_llml = MagicMock()
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def observe(result):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return result
+
+    mock_llml.conversation_to_metadata.side_effect = lambda **_: observe(
+        Mock(tags=["conversation"], vectors=None)
+    )
+    mock_llml.enrichment_to_metadata.side_effect = lambda *_args, **_kwargs: observe(
+        Mock(tags=["enrichment"], vectors=None)
+    )
+
+    with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
+        await task.mine()
+
+    assert max_active == 2

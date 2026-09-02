@@ -1,3 +1,5 @@
+import threading
+import time
 from unittest.mock import AsyncMock, MagicMock, Mock
 from unittest.mock import patch
 
@@ -53,17 +55,11 @@ async def test_mine_returns_expected_tags_and_vectors():
     enrichment_result.tags = ["enrichment", "metadata"]
     mock_llml.enrichment_to_metadata = Mock(return_value=enrichment_result)
     
-    # Mock combine_metadata_tags
-    combined_result = Mock()
-    combined_result.tags = ["webpage", "content", "enrichment", "metadata"]
-    combined_result.vectors = {"webpage": [0.1, 0.2], "content": [0.3, 0.4], "enrichment": [0.5, 0.6], "metadata": [0.7, 0.8]}
-    mock_llml.combine_metadata_tags = Mock(return_value=combined_result)
-
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
 
         assert result["tags"] == ["webpage", "content", "enrichment", "metadata"]
-        assert result["vectors"] == {"webpage": [0.1, 0.2], "content": [0.3, 0.4], "enrichment": [0.5, 0.6], "metadata": [0.7, 0.8]}
+        assert result["vectors"] is None
         
         # Verify website_to_metadata was called for main content
         mock_llml.website_to_metadata.assert_called_once_with("This is webpage content.", generateEmbeddings=False, input_categories=None)
@@ -71,8 +67,7 @@ async def test_mine_returns_expected_tags_and_vectors():
         # Verify enrichment_to_metadata was called for enrichment content
         mock_llml.enrichment_to_metadata.assert_called_once_with("Enrichment content here.", generateEmbeddings=False, input_categories=None)
         
-        # Verify combine_metadata_tags was called with both tag sets
-        mock_llml.combine_metadata_tags.assert_called_once_with([["webpage", "content"], ["enrichment", "metadata"]], generateEmbeddings=False)
+        mock_llml.combine_metadata_tags.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -110,8 +105,6 @@ async def test_mine_handles_empty_tags_and_vectors():
     mock_result = Mock()
     mock_result.tags = []
     mock_llml.website_to_metadata = Mock(return_value=mock_result)
-    mock_llml.combine_metadata_tags = Mock(return_value=None)
-
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
 
@@ -158,12 +151,6 @@ async def test_mine_processes_only_webpage_content():
     website_result.tags = ["artificial", "intelligence", "webpage"]
     mock_llml.website_to_metadata = Mock(return_value=website_result)
     
-    # Mock combine_metadata_tags
-    combined_result = Mock()
-    combined_result.tags = ["artificial", "intelligence", "webpage"]
-    combined_result.vectors = {"artificial": [0.1], "intelligence": [0.2], "webpage": [0.3]}
-    mock_llml.combine_metadata_tags = Mock(return_value=combined_result)
-
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
 
@@ -224,19 +211,17 @@ async def test_mine_processes_webpage_and_enrichment():
     enrichment_result1.tags = ["ai", "research"]
     enrichment_result2 = Mock()
     enrichment_result2.tags = ["tech", "news"]
-    mock_llml.enrichment_to_metadata = Mock(side_effect=[enrichment_result1, enrichment_result2])
-    
-    # Mock combine_metadata_tags
-    combined_result = Mock()
-    combined_result.tags = ["machine", "learning", "ai", "research", "tech", "news"]
-    combined_result.vectors = {"machine": [0.1], "learning": [0.2], "ai": [0.3], "research": [0.4], "tech": [0.5], "news": [0.6]}
-    mock_llml.combine_metadata_tags = Mock(return_value=combined_result)
+    mock_llml.enrichment_to_metadata = Mock(
+        side_effect=lambda content, **_: (
+            enrichment_result1 if content.startswith("AI Research") else enrichment_result2
+        )
+    )
 
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
 
         assert result["tags"] == ["machine", "learning", "ai", "research", "tech", "news"]
-        assert result["vectors"] == {"machine": [0.1], "learning": [0.2], "ai": [0.3], "research": [0.4], "tech": [0.5], "news": [0.6]}
+        assert result["vectors"] is None
         
         # Verify website_to_metadata was called once for main content
         mock_llml.website_to_metadata.assert_called_once_with("Main webpage about machine learning.", generateEmbeddings=False, input_categories=None)
@@ -246,9 +231,7 @@ async def test_mine_processes_webpage_and_enrichment():
         mock_llml.enrichment_to_metadata.assert_any_call("AI Research Breakthrough\nNew developments in ML research.", generateEmbeddings=False, input_categories=None)
         mock_llml.enrichment_to_metadata.assert_any_call("Tech News Update\nLatest AI advancements announced.", generateEmbeddings=False, input_categories=None)
         
-        # Verify combine_metadata_tags was called with all tag sets
-        expected_tag_sets = [["machine", "learning"], ["ai", "research"], ["tech", "news"]]
-        mock_llml.combine_metadata_tags.assert_called_once_with(expected_tag_sets, generateEmbeddings=False)
+        mock_llml.combine_metadata_tags.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -296,12 +279,6 @@ async def test_mine_handles_llm_method_failures():
     enrichment_result.tags = ["enrichment", "tags"]
     mock_llml.enrichment_to_metadata = Mock(return_value=enrichment_result)
     
-    # Mock combine_metadata_tags
-    combined_result = Mock()
-    combined_result.tags = ["enrichment", "tags"]
-    combined_result.vectors = {"enrichment": [0.1], "tags": [0.2]}
-    mock_llml.combine_metadata_tags = Mock(return_value=combined_result)
-
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
 
@@ -348,6 +325,7 @@ async def test_mine_returns_extracted_tags_when_combination_fails():
         "tags": ["bothell property management", "rental homes", "bothell municipal code"],
         "vectors": None,
     }
+    mock_llml.combine_metadata_tags.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -383,8 +361,6 @@ async def test_mine_handles_none_result():
 
     mock_llml = MagicMock()
     mock_llml.website_to_metadata = Mock(return_value=None)
-    mock_llml.combine_metadata_tags = Mock(return_value=None)
-
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
         # Should return empty results when all LLM calls fail
@@ -522,17 +498,11 @@ async def test_mine_constructs_conversation_correctly():
     enrichment_result.tags = ["content"]
     mock_llml.enrichment_to_metadata = Mock(return_value=enrichment_result)
     
-    # Mock combine_metadata_tags
-    combined_result = Mock()
-    combined_result.tags = ["webpage", "content"]
-    combined_result.vectors = {"webpage": [0.1], "content": [0.2]}
-    mock_llml.combine_metadata_tags = Mock(return_value=combined_result)
-
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
 
         assert result["tags"] == ["webpage", "content"]
-        assert result["vectors"] == {"webpage": [0.1], "content": [0.2]}
+        assert result["vectors"] is None
         
         # Verify website_to_metadata was called with the first line
         mock_llml.website_to_metadata.assert_called_once_with("First line of webpage.", generateEmbeddings=False, input_categories=None)
@@ -542,6 +512,45 @@ async def test_mine_constructs_conversation_correctly():
         mock_llml.enrichment_to_metadata.assert_any_call("Second line with content.", generateEmbeddings=False, input_categories=None)
         mock_llml.enrichment_to_metadata.assert_any_call("Third line here.", generateEmbeddings=False, input_categories=None)
         
-        # Verify combine_metadata_tags was called with all tag sets
-        expected_tag_sets = [["webpage"], ["content"], ["content"]]
-        mock_llml.combine_metadata_tags.assert_called_once_with(expected_tag_sets, generateEmbeddings=False)
+        mock_llml.combine_metadata_tags.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mine_runs_webpage_and_enrichment_extractions_concurrently():
+    task = WebpageMetadataGenerationTask(
+        mode="local",
+        api_version=1.4,
+        guid="test-guid",
+        bundle_guid="bundle-guid",
+        type="webpage_metadata_generation",
+        input=WebpageMarkdownTaskInput(
+            guid="input-guid",
+            input_type="webpage_markdown",
+            data=WebpageMarkdownTaskInputData(
+                window=[(0, "main"), (1, "enrichment")],
+                participants=[],
+            ),
+        ),
+    )
+    mock_llml = MagicMock()
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def observe(tag):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return Mock(tags=[tag], vectors=None)
+
+    mock_llml.website_to_metadata.side_effect = lambda *_args, **_kwargs: observe("main")
+    mock_llml.enrichment_to_metadata.side_effect = lambda *_args, **_kwargs: observe("enrichment")
+
+    with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
+        await task.mine()
+
+    assert max_active == 2

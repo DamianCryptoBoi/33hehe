@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 from typing import Literal
 from typing import Optional
@@ -40,40 +41,41 @@ class ConversationTaggingTask(Task):
                 input_categories=self.input.input_categories
             )
 
-            result = llml.conversation_to_metadata(conversation=conversation, generateEmbeddings=False)
-
             enrichment_lines = self.input.data.enrichment_lines or []
-            if not enrichment_lines:
-                if result:
-                    return {"tags": result.tags, "vectors": result.vectors}
-                return {"tags": [], "vectors": None}
-
-            all_tags = []
-            if result and result.tags:
-                all_tags.append(result.tags)
-
-            for _, content in enrichment_lines:
-                enrichment_result = llml.enrichment_to_metadata(
+            calls = [
+                asyncio.to_thread(
+                    llml.conversation_to_metadata,
+                    conversation=conversation,
+                    generateEmbeddings=False,
+                )
+            ]
+            calls.extend(
+                asyncio.to_thread(
+                    llml.enrichment_to_metadata,
                     content,
                     generateEmbeddings=False,
                     input_categories=self.input.input_categories,
                     validator_aligned=True,
                 )
-                if enrichment_result and enrichment_result.tags:
-                    all_tags.append(enrichment_result.tags)
+                for _, content in enrichment_lines
+            )
+            results = await asyncio.gather(*calls)
+            result = results[0]
+
+            if not enrichment_lines:
+                if result:
+                    return {"tags": result.tags, "vectors": result.vectors}
+                return {"tags": [], "vectors": None}
+
+            all_tags = [item.tags for item in results if item and item.tags]
 
             if not all_tags:
                 return {"tags": [], "vectors": None}
 
-            fallback_tags = list(dict.fromkeys(tag for tags in all_tags for tag in tags))[:20]
-            if len(all_tags) == 1:
-                return {"tags": fallback_tags, "vectors": None}
-
-            combined_result = llml.combine_named_entities(all_tags, generateEmbeddings=False)
-            if combined_result:
-                output = {"tags": combined_result.tags, "vectors": combined_result.vectors}
-            else:
-                output = {"tags": fallback_tags, "vectors": None}
+            output = {
+                "tags": list(dict.fromkeys(tag for tags in all_tags for tag in tags))[:20],
+                "vectors": None,
+            }
         except Exception as e:
             bt.logging.error(f"Error during mining: {e}")
             raise e

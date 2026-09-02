@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 from typing import Literal
 from typing import Optional
@@ -29,33 +30,37 @@ class WebpageMetadataGenerationTask(Task):
         llml = get_llm_backend()
 
         try:
-            all_tags = []
-            
-            # Process each line in the window
-            for idx, (line_idx, content) in enumerate(self.input.data.window):
-                if idx == 0:
-                    # First line is always the main webpage content
-                    result = llml.website_to_metadata(content, generateEmbeddings=False, input_categories=self.input.input_categories)
-                else:
-                    # Subsequent lines are enrichment content
-                    result = llml.enrichment_to_metadata(content, generateEmbeddings=False, input_categories=self.input.input_categories)
-                
-                if result and result.tags:
-                    all_tags.append(result.tags)
-            
+            if not self.input.data.window:
+                return {"tags": [], "vectors": None}
+
+            _, main_content = self.input.data.window[0]
+            calls = [
+                asyncio.to_thread(
+                    llml.website_to_metadata,
+                    main_content,
+                    generateEmbeddings=False,
+                    input_categories=self.input.input_categories,
+                )
+            ]
+            calls.extend(
+                asyncio.to_thread(
+                    llml.enrichment_to_metadata,
+                    content,
+                    generateEmbeddings=False,
+                    input_categories=self.input.input_categories,
+                )
+                for _, content in self.input.data.window[1:]
+            )
+            results = await asyncio.gather(*calls)
+            all_tags = [result.tags for result in results if result and result.tags]
+
             if not all_tags:
                 output = {"tags": [], "vectors": None}
             else:
-                fallback_tags = list(dict.fromkeys(tag for tags in all_tags for tag in tags))[:20]
-                if len(all_tags) == 1:
-                    return {"tags": fallback_tags, "vectors": None}
-
-                combined_result = llml.combine_metadata_tags(all_tags, generateEmbeddings=False)
-                output = (
-                    {"tags": combined_result.tags, "vectors": combined_result.vectors}
-                    if combined_result
-                    else {"tags": fallback_tags, "vectors": None}
-                )
+                output = {
+                    "tags": list(dict.fromkeys(tag for tags in all_tags for tag in tags))[:20],
+                    "vectors": None,
+                }
 
         except Exception as e:
             bt.logging.error(f"Error during mining: {e}")

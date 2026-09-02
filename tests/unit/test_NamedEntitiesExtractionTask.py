@@ -1,3 +1,5 @@
+import threading
+import time
 from unittest.mock import AsyncMock, MagicMock, Mock, call
 from unittest.mock import patch
 
@@ -33,7 +35,6 @@ async def test_mine_returns_expected_tags():
     mock_result.tags = ["John Smith", "Apple Inc", "New York"]
     mock_llml.raw_transcript_to_named_entities = Mock(return_value=mock_result)
     mock_llml.enrichment_to_NER = Mock(return_value=mock_result)
-    mock_llml.combine_named_entities = Mock(return_value=mock_result)
 
     with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
@@ -42,7 +43,7 @@ async def test_mine_returns_expected_tags():
         # Verify the transcript was constructed correctly
         mock_llml.raw_transcript_to_named_entities.assert_called_once_with("John Smith works at Apple Inc.", generateEmbeddings=False)
         mock_llml.enrichment_to_NER.assert_called_once_with("He lives in New York.", generateEmbeddings=False)
-        mock_llml.combine_named_entities.assert_called_once()
+        mock_llml.combine_named_entities.assert_not_called()
 
 @pytest.mark.asyncio
 async def test_mine_handles_empty_tags():
@@ -68,7 +69,6 @@ async def test_mine_handles_empty_tags():
     mock_result.tags = []
     mock_llml.raw_transcript_to_named_entities = Mock(return_value=mock_result)
     mock_llml.enrichment_to_NER = Mock(return_value=mock_result)
-    mock_llml.combine_named_entities = Mock(return_value=mock_result)
 
     with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
@@ -164,6 +164,7 @@ async def test_mine_returns_extracted_entities_when_combination_fails():
         "tags": ["seattle city council", "seattle", "washington"],
         "vectors": None,
     }
+    mock_llml.combine_named_entities.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -217,7 +218,6 @@ async def test_mine_handles_empty_window():
     mock_result.tags = []
     mock_llml.raw_transcript_to_named_entities = Mock(return_value=mock_result)
     mock_llml.enrichment_to_NER = Mock(return_value=mock_result)
-    mock_llml.combine_named_entities = Mock(return_value=mock_result)
 
     with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
@@ -252,7 +252,6 @@ async def test_mine_constructs_transcript_correctly():
     mock_result.tags = ["entity1", "entity2"]
     mock_llml.raw_transcript_to_named_entities = Mock(return_value=mock_result)
     mock_llml.enrichment_to_NER = Mock(return_value=mock_result)
-    mock_llml.combine_named_entities = Mock(return_value=mock_result)
 
     with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
         result = await task.mine()
@@ -263,4 +262,46 @@ async def test_mine_constructs_transcript_correctly():
         expected_webpages = [call("Second line with entities.", generateEmbeddings=False), call("Third line here.", generateEmbeddings=False)]
         mock_llml.raw_transcript_to_named_entities.assert_called_once_with(expected_transcript, generateEmbeddings=False)
         mock_llml.enrichment_to_NER.assert_has_calls(expected_webpages)
-        mock_llml.combine_named_entities.assert_called_once()
+        mock_llml.combine_named_entities.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mine_runs_transcript_and_enrichment_extractions_concurrently():
+    task = NamedEntitiesExtractionTask(
+        mode="local",
+        api_version=1.4,
+        guid="test-guid",
+        bundle_guid="bundle-guid",
+        type="named_entities_extraction",
+        input=NamedEntitiesExtractionTaskInput(
+            guid="input-guid",
+            input_type="document",
+            data=NamedEntitiesExtractionTaskInputData(
+                window_idx=0,
+                window=[(0, "main"), (1, "enrichment")],
+                participants=[],
+            ),
+        ),
+    )
+    mock_llml = MagicMock()
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def observe(tag):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return Mock(tags=[tag], vectors=None)
+
+    mock_llml.raw_transcript_to_named_entities.side_effect = lambda *_args, **_kwargs: observe("main")
+    mock_llml.enrichment_to_NER.side_effect = lambda *_args, **_kwargs: observe("enrichment")
+
+    with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
+        await task.mine()
+
+    assert max_active == 2
