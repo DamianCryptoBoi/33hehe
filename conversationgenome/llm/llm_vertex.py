@@ -26,7 +26,7 @@ class LlmVertex(LlmLib):
 
         self.location = c.get("env", "GOOGLE_CLOUD_LOCATION", "global")
         self.model = c.get("env", "VERTEX_MODEL", DEFAULT_MODEL)
-        self.reasoning_effort = "MINIMAL"
+        self.reasoning_effort = "LOW"
         self.embedding_model = c.get(
             "env", "VERTEX_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
         )

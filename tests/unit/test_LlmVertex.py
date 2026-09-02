@@ -90,7 +90,7 @@ def test_adc_project_scopes_and_credentials_are_used(monkeypatch):
     }
 
 
-def test_basic_prompt_uses_adc_and_minimal_thinking(monkeypatch):
+def test_basic_prompt_uses_adc_and_low_thinking(monkeypatch):
     module = load_vertex_module()
     response = FakeResponse(
         {
@@ -118,7 +118,7 @@ def test_basic_prompt_uses_adc_and_minimal_thinking(monkeypatch):
                         }
                     ],
                     "generationConfig": {
-                        "thinkingConfig": {"thinkingLevel": "MINIMAL"}
+                        "thinkingConfig": {"thinkingLevel": "LOW"}
                     },
                 },
                 "timeout": 24,
@@ -153,7 +153,7 @@ def test_model_url_uses_location_specific_endpoint(monkeypatch, location, host):
     )
 
 
-def test_skill_coverage_prompt_uses_minimal_thinking(monkeypatch):
+def test_skill_coverage_prompt_uses_low_thinking(monkeypatch):
     module = load_vertex_module()
     session = FakeSession(
         FakeResponse(
@@ -189,15 +189,15 @@ def test_skill_coverage_prompt_uses_minimal_thinking(monkeypatch):
 
     assert result.skill == "# Skill"
     assert session.posts[0][1]["json"]["generationConfig"]["thinkingConfig"] == {
-        "thinkingLevel": "MINIMAL"
+        "thinkingLevel": "LOW"
     }
     assert llm.basic_prompt("Tag this conversation") == "alpha,beta"
     assert session.posts[1][1]["json"]["generationConfig"]["thinkingConfig"] == {
-        "thinkingLevel": "MINIMAL"
+        "thinkingLevel": "LOW"
     }
 
 
-def test_fallback_skill_coverage_prompts_use_minimal_thinking(monkeypatch):
+def test_fallback_skill_coverage_prompts_use_low_thinking(monkeypatch):
     module = load_vertex_module()
     session = FakeSession(
         FakeResponse(
@@ -238,10 +238,10 @@ def test_fallback_skill_coverage_prompts_use_minimal_thinking(monkeypatch):
     assert [
         post[1]["json"]["generationConfig"]["thinkingConfig"]
         for post in session.posts
-    ] == [{"thinkingLevel": "MINIMAL"}] * 3
+    ] == [{"thinkingLevel": "LOW"}] * 3
 
 
-def test_skill_coverage_remains_minimal_after_error(monkeypatch):
+def test_skill_coverage_remains_low_after_error(monkeypatch):
     module = load_vertex_module()
     session = FakeSession(
         FakeResponse(error=RuntimeError("unavailable")),
@@ -260,7 +260,7 @@ def test_skill_coverage_remains_minimal_after_error(monkeypatch):
     assert [
         post[1]["json"]["generationConfig"]["thinkingConfig"]
         for post in session.posts
-    ] == [{"thinkingLevel": "MINIMAL"}] * 2
+    ] == [{"thinkingLevel": "LOW"}] * 2
 
 
 def test_json_prompt_requests_json_response(monkeypatch):
