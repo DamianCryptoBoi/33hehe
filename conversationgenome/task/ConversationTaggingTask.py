@@ -55,6 +55,7 @@ class ConversationTaggingTask(Task):
                     content,
                     generateEmbeddings=False,
                     input_categories=self.input.input_categories,
+                    validator_aligned=True,
                 )
                 if enrichment_result and enrichment_result.tags:
                     all_tags.append(enrichment_result.tags)
@@ -62,7 +63,7 @@ class ConversationTaggingTask(Task):
             if not all_tags:
                 return {"tags": result.tags, "vectors": result.vectors}
 
-            combined_result = llml.combine_metadata_tags(all_tags, generateEmbeddings=False)
+            combined_result = llml.combine_named_entities(all_tags, generateEmbeddings=False)
             if combined_result:
                 output = {"tags": combined_result.tags, "vectors": combined_result.vectors}
             else:

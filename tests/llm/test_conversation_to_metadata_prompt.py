@@ -101,3 +101,42 @@ def test_llm_cleans_tags():
     assert 'hi' in res.tags
     assert 'how are you' in res.tags
     assert 'greetings' in res.tags
+
+
+def test_conversation_uses_validator_prompt_and_renders_input_placeholder(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    conversation = Conversation(
+        guid="test-guid",
+        lines=[(0, "Hello"), (1, "Hi there!")],
+        miner_task_prompt="Validator instructions\n\n{{ input }}",
+    )
+    llml = get_llm_backend()
+    llml.basic_prompt = Mock(return_value="greeting, introduction")
+
+    llml.conversation_to_metadata(conversation)
+
+    prompt = llml.basic_prompt.call_args.args[0]
+    assert prompt.startswith("Validator instructions")
+    assert "{{ input }}" not in prompt
+    assert "<conversation" in prompt
+    assert "<p0>Hello</p0>" in prompt
+    assert "<p1>Hi there!</p1>" in prompt
+
+
+def test_conversation_appends_xml_when_validator_prompt_has_no_placeholder(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    conversation = Conversation(
+        guid="test-guid",
+        lines=[(0, "Hello")],
+        miner_task_prompt="Validator instructions without a placeholder.",
+    )
+    llml = get_llm_backend()
+    llml.basic_prompt = Mock(return_value="greeting")
+
+    llml.conversation_to_metadata(conversation)
+
+    prompt = llml.basic_prompt.call_args.args[0]
+    assert prompt == (
+        "Validator instructions without a placeholder.\n\n"
+        "<conversation id='83945'><p0>Hello</p0></conversation>"
+    )

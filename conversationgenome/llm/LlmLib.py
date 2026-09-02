@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import functools
 import json
 import random
+import re
 from typing import List
 
 from conversationgenome.api.models.conversation import Conversation
@@ -95,7 +96,16 @@ class LlmLib(ABC):
     def conversation_to_metadata(self, conversation: Conversation, generateEmbeddings=False) -> RawMetadata|None:
         convo_xml, participants = Utils.generate_convo_xml(conversation)
 
-        if conversation.input_categories and 'coding' in conversation.input_categories:
+        miner_task_prompt = getattr(conversation, "miner_task_prompt", None)
+        if miner_task_prompt:
+            prompt, substitutions = re.subn(
+                r"{{\s*input\s*}}",
+                lambda _match: convo_xml,
+                miner_task_prompt,
+            )
+            if substitutions == 0:
+                prompt = f"{miner_task_prompt}\n\n{convo_xml}"
+        elif conversation.input_categories and 'coding' in conversation.input_categories:
             prompt = prompt_manager.conversation_to_metadata_coding_prompt(convo_xml)
         else:
             prompt = prompt_manager.conversation_to_metadata_prompt(convo_xml)
@@ -373,8 +383,12 @@ class LlmLib(ABC):
 
         return AssertionJudgeResult(verdicts=verdicts, success=True)
 
-    def enrichment_to_metadata(self, enrichment_content: str, generateEmbeddings=False, input_categories=None) -> RawMetadata|None:
-        if input_categories and 'coding' in input_categories:
+    def enrichment_to_metadata(self, enrichment_content: str, generateEmbeddings=False, input_categories=None, validator_aligned=False) -> RawMetadata|None:
+        if validator_aligned and input_categories and 'coding' in input_categories:
+            prompt = prompt_manager.conversation_enrichment_to_metadata_coding_prompt(enrichment_content)
+        elif validator_aligned:
+            prompt = prompt_manager.conversation_enrichment_to_metadata_prompt(enrichment_content)
+        elif input_categories and 'coding' in input_categories:
             prompt = prompt_manager.enrichment_to_metadata_coding_prompt(enrichment_content)
         else:
             prompt = prompt_manager.enrichment_to_metadata_prompt(enrichment_content)

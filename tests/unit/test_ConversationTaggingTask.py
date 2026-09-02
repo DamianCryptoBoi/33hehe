@@ -74,3 +74,39 @@ async def test_mine_handles_exception_from_llmlib_raises_error():
 
         with pytest.raises(Exception, match="Mining failed"):
             await task.mine()
+
+
+@pytest.mark.asyncio
+async def test_mine_uses_validator_aligned_enrichment_and_named_entity_combiner():
+    mock_llml = MagicMock()
+    primary_result = Mock(tags=["east german military"], vectors=None)
+    enrichment_result = Mock(tags=["united states congress"], vectors=None)
+    combined_result = Mock(
+        tags=["east german military", "united states congress"],
+        vectors=None,
+    )
+    mock_llml.conversation_to_metadata.return_value = primary_result
+    mock_llml.enrichment_to_metadata.return_value = enrichment_result
+    mock_llml.combine_named_entities.return_value = combined_result
+
+    with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
+        task = DummyData.conversation_tagging_task()
+        task.input.data.enrichment_lines = [(0, "United States Congress and Senate")]
+
+        result = await task.mine()
+
+    mock_llml.enrichment_to_metadata.assert_called_once_with(
+        "United States Congress and Senate",
+        generateEmbeddings=False,
+        input_categories=task.input.input_categories,
+        validator_aligned=True,
+    )
+    mock_llml.combine_named_entities.assert_called_once_with(
+        [["east german military"], ["united states congress"]],
+        generateEmbeddings=False,
+    )
+    mock_llml.combine_metadata_tags.assert_not_called()
+    assert result == {
+        "tags": ["east german military", "united states congress"],
+        "vectors": None,
+    }
