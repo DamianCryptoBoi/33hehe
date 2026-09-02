@@ -110,3 +110,25 @@ async def test_mine_uses_validator_aligned_enrichment_and_named_entity_combiner(
         "tags": ["east german military", "united states congress"],
         "vectors": None,
     }
+
+
+@pytest.mark.asyncio
+async def test_mine_preserves_all_extracted_tags_when_combination_fails():
+    mock_llml = MagicMock()
+    mock_llml.conversation_to_metadata.return_value = Mock(
+        tags=["east german military", "bernd schwipper"], vectors=None
+    )
+    mock_llml.enrichment_to_metadata.return_value = Mock(
+        tags=["united states congress", "bernd schwipper"], vectors=None
+    )
+    mock_llml.combine_named_entities.return_value = None
+
+    with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
+        task = DummyData.conversation_tagging_task()
+        task.input.data.enrichment_lines = [(0, "United States Congress")]
+        result = await task.mine()
+
+    assert result == {
+        "tags": ["east german military", "bernd schwipper", "united states congress"],
+        "vectors": None,
+    }

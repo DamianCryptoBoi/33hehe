@@ -45,6 +45,7 @@ async def test_mine_returns_tags_and_vectors():
     mock_llml = MagicMock()
     skill_result = Mock()
     skill_result.tags = ["docx", "parsing"]
+    skill_result.vectors = None
     mock_llml.skill_to_metadata = Mock(return_value=skill_result)
 
     combined_result = Mock()
@@ -56,11 +57,49 @@ async def test_mine_returns_tags_and_vectors():
         result = await task.mine()
 
     assert result["tags"] == ["docx", "parsing"]
-    assert result["vectors"] == {"docx": [0.1], "parsing": [0.2]}
+    assert result["vectors"] is None
     mock_llml.skill_to_metadata.assert_called_once_with(
         "# Parse .docx\n\nInstructions to parse docx files.", generateEmbeddings=False, input_categories=None
     )
-    mock_llml.combine_metadata_tags.assert_called_once_with([["docx", "parsing"]], generateEmbeddings=False)
+    mock_llml.combine_metadata_tags.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mine_returns_extracted_tags_when_combination_fails():
+    task = _make_task([(0, "first"), (1, "second")])
+    mock_llml = MagicMock()
+    mock_llml.skill_to_metadata.side_effect = [
+        Mock(tags=["authentication", "magic links"]),
+        Mock(tags=["email security", "authentication"]),
+    ]
+    mock_llml.combine_metadata_tags.return_value = None
+
+    with patch("conversationgenome.task.SkillGenerationTask.get_llm_backend", return_value=mock_llml):
+        result = await task.mine()
+
+    assert result == {
+        "tags": ["authentication", "magic links", "email security"],
+        "vectors": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_mine_caps_fallback_tags_at_twenty_in_original_order():
+    task = _make_task([(0, "first"), (1, "second")])
+    mock_llml = MagicMock()
+    mock_llml.skill_to_metadata.side_effect = [
+        Mock(tags=[f"tag-{index}" for index in range(15)]),
+        Mock(tags=["tag-0"] + [f"tag-{index}" for index in range(15, 25)]),
+    ]
+    mock_llml.combine_metadata_tags.return_value = None
+
+    with patch("conversationgenome.task.SkillGenerationTask.get_llm_backend", return_value=mock_llml):
+        result = await task.mine()
+
+    assert result == {
+        "tags": [f"tag-{index}" for index in range(20)],
+        "vectors": None,
+    }
 
 
 @pytest.mark.asyncio

@@ -1,3 +1,4 @@
+import time
 from typing import List
 from openai import OpenAI
 
@@ -5,6 +6,10 @@ from conversationgenome.ConfigLib import c
 from conversationgenome.llm.LlmLib import LlmLib, model_override, reasoning_effort_override, service_tier_override
 
 DEFAULT_MODEL = "gpt-5.2"
+REQUEST_TIMEOUT_SECONDS = 10.0
+FAST_RETRY_SECONDS = 1.0
+TRANSIENT_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
+TRANSIENT_ERROR_NAMES = {"APIConnectionError", "APITimeoutError", "RateLimitError"}
 
 
 class LlmOpenAI(LlmLib):
@@ -13,7 +18,11 @@ class LlmOpenAI(LlmLib):
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set. Please set it in the .env file or as an environment variable.")
         base_url = None if ignore_model_override else c.get('env', "OPENAI_BASE_URL")
-        client_args = {"api_key": api_key}
+        client_args = {
+            "api_key": api_key,
+            "timeout": REQUEST_TIMEOUT_SECONDS,
+            "max_retries": 0,
+        }
         if base_url:
             client_args["base_url"] = base_url
         self.client = OpenAI(**client_args)
@@ -45,14 +54,31 @@ class LlmOpenAI(LlmLib):
         if extra_body:
             completion_params["extra_body"] = extra_body
 
-        try:
-            response = self.client.chat.completions.create(**completion_params)
-            return response.choices[0].message.content or ""
-        except Exception as e:
-            print(f"OpenAI Completion Error")
-            # Uncomment the line below for debugging purposes
-            # print(e)
-            return None
+        for attempt in range(2):
+            started_at = time.monotonic()
+            try:
+                response = self.client.chat.completions.create(**completion_params)
+                content = response.choices[0].message.content or ""
+                if content:
+                    return content
+
+                elapsed = time.monotonic() - started_at
+                print("OpenAI Completion Error: empty response content")
+                if attempt == 0 and elapsed <= FAST_RETRY_SECONDS:
+                    continue
+                return None
+            except Exception as e:
+                elapsed = time.monotonic() - started_at
+                print(f"OpenAI Completion Error: {type(e).__name__}: {e}")
+                is_transient = (
+                    getattr(e, "status_code", None) in TRANSIENT_STATUS_CODES
+                    or type(e).__name__ in TRANSIENT_ERROR_NAMES
+                )
+                if attempt == 0 and is_transient and elapsed <= FAST_RETRY_SECONDS:
+                    continue
+                return None
+
+        return None
 
     def get_vector_embeddings(self, tag: str, dimensions=1536) -> List[float]|None:
         tag = tag.replace("\n", " ")

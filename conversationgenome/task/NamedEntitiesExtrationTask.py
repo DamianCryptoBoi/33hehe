@@ -49,12 +49,19 @@ class NamedEntitiesExtractionTask(Task):
                 if result and result.tags:
                     all_tags.append(result.tags)
 
-            # Combine all tags from transcript and enrichment content
-            if all_tags:
-                combined_result = llml.combine_named_entities(all_tags, generateEmbeddings=False)
-                output = {"tags": combined_result.tags if combined_result else [], "vectors": combined_result.vectors if combined_result else None}
-            else:
+            if not all_tags:
                 output = {"tags": [], "vectors": None}
+            else:
+                fallback_tags = list(dict.fromkeys(tag for tags in all_tags for tag in tags))[:20]
+                if len(all_tags) == 1:
+                    return {"tags": fallback_tags, "vectors": None}
+
+                combined_result = llml.combine_named_entities(all_tags, generateEmbeddings=False)
+                output = (
+                    {"tags": combined_result.tags, "vectors": combined_result.vectors}
+                    if combined_result
+                    else {"tags": fallback_tags, "vectors": None}
+                )
 
         except Exception as e:
             bt.logging.error(f"Error during mining: {e}")

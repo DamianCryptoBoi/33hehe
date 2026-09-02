@@ -44,7 +44,9 @@ class ConversationTaggingTask(Task):
 
             enrichment_lines = self.input.data.enrichment_lines or []
             if not enrichment_lines:
-                return {"tags": result.tags, "vectors": result.vectors}
+                if result:
+                    return {"tags": result.tags, "vectors": result.vectors}
+                return {"tags": [], "vectors": None}
 
             all_tags = []
             if result and result.tags:
@@ -61,13 +63,17 @@ class ConversationTaggingTask(Task):
                     all_tags.append(enrichment_result.tags)
 
             if not all_tags:
-                return {"tags": result.tags, "vectors": result.vectors}
+                return {"tags": [], "vectors": None}
+
+            fallback_tags = list(dict.fromkeys(tag for tags in all_tags for tag in tags))[:20]
+            if len(all_tags) == 1:
+                return {"tags": fallback_tags, "vectors": None}
 
             combined_result = llml.combine_named_entities(all_tags, generateEmbeddings=False)
             if combined_result:
                 output = {"tags": combined_result.tags, "vectors": combined_result.vectors}
             else:
-                output = {"tags": result.tags, "vectors": result.vectors}
+                output = {"tags": fallback_tags, "vectors": None}
         except Exception as e:
             bt.logging.error(f"Error during mining: {e}")
             raise e

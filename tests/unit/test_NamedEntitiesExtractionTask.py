@@ -103,6 +103,70 @@ async def test_mine_handles_none_result():
 
 
 @pytest.mark.asyncio
+async def test_mine_skips_combination_for_one_successful_tag_set():
+    task = NamedEntitiesExtractionTask(
+        mode="local",
+        api_version=1.4,
+        guid="test-guid",
+        bundle_guid="bundle-guid",
+        type="named_entities_extraction",
+        input=NamedEntitiesExtractionTaskInput(
+            guid="input-guid",
+            input_type="document",
+            data=NamedEntitiesExtractionTaskInputData(
+                window_idx=0,
+                window=[(0, "Seattle City Council met in Seattle.")],
+                participants=[],
+            ),
+        ),
+    )
+    mock_llml = MagicMock()
+    mock_llml.raw_transcript_to_named_entities.return_value = Mock(
+        tags=["seattle city council", "seattle"]
+    )
+
+    with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
+        result = await task.mine()
+
+    assert result == {"tags": ["seattle city council", "seattle"], "vectors": None}
+    mock_llml.combine_named_entities.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mine_returns_extracted_entities_when_combination_fails():
+    task = NamedEntitiesExtractionTask(
+        mode="local",
+        api_version=1.4,
+        guid="test-guid",
+        bundle_guid="bundle-guid",
+        type="named_entities_extraction",
+        input=NamedEntitiesExtractionTaskInput(
+            guid="input-guid",
+            input_type="document",
+            data=NamedEntitiesExtractionTaskInputData(
+                window_idx=0,
+                window=[(0, "Seattle City Council"), (1, "Seattle, Washington")],
+                participants=[],
+            ),
+        ),
+    )
+    mock_llml = MagicMock()
+    mock_llml.raw_transcript_to_named_entities.return_value = Mock(
+        tags=["seattle city council", "seattle"]
+    )
+    mock_llml.enrichment_to_NER.return_value = Mock(tags=["seattle", "washington"])
+    mock_llml.combine_named_entities.return_value = None
+
+    with patch("conversationgenome.task.NamedEntitiesExtrationTask.get_llm_backend", return_value=mock_llml):
+        result = await task.mine()
+
+    assert result == {
+        "tags": ["seattle city council", "seattle", "washington"],
+        "vectors": None,
+    }
+
+
+@pytest.mark.asyncio
 async def test_mine_handles_exception_from_llm():
     task = NamedEntitiesExtractionTask(
         mode="local",

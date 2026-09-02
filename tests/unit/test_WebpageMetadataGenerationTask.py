@@ -168,12 +168,12 @@ async def test_mine_processes_only_webpage_content():
         result = await task.mine()
 
         assert result["tags"] == ["artificial", "intelligence", "webpage"]
-        assert result["vectors"] == {"artificial": [0.1], "intelligence": [0.2], "webpage": [0.3]}
+        assert result["vectors"] is None
         
         # Verify only website_to_metadata was called
         mock_llml.website_to_metadata.assert_called_once_with("This is webpage content about AI.", generateEmbeddings=False, input_categories=None)
         mock_llml.enrichment_to_metadata.assert_not_called()
-        mock_llml.combine_metadata_tags.assert_called_once_with([["artificial", "intelligence", "webpage"]], generateEmbeddings=False)
+        mock_llml.combine_metadata_tags.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -307,12 +307,47 @@ async def test_mine_handles_llm_method_failures():
 
         # Should still return results from enrichment even if main webpage fails
         assert result["tags"] == ["enrichment", "tags"]
-        assert result["vectors"] == {"enrichment": [0.1], "tags": [0.2]}
+        assert result["vectors"] is None
         
         # Verify methods were called
         mock_llml.website_to_metadata.assert_called_once()
         mock_llml.enrichment_to_metadata.assert_called_once_with("Enrichment content.", generateEmbeddings=False, input_categories=None)
-        mock_llml.combine_metadata_tags.assert_called_once_with([["enrichment", "tags"]], generateEmbeddings=False)
+        mock_llml.combine_metadata_tags.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mine_returns_extracted_tags_when_combination_fails():
+    task = WebpageMetadataGenerationTask(
+        mode="local",
+        api_version=1.4,
+        guid="test-guid",
+        bundle_guid="bundle-guid",
+        type="webpage_metadata_generation",
+        input=WebpageMarkdownTaskInput(
+            guid="input-guid",
+            input_type="webpage_markdown",
+            data=WebpageMarkdownTaskInputData(
+                window=[(0, "Bothell property management"), (1, "Bothell municipal code")],
+                participants=[],
+            ),
+        ),
+    )
+    mock_llml = MagicMock()
+    mock_llml.website_to_metadata.return_value = Mock(
+        tags=["bothell property management", "rental homes"]
+    )
+    mock_llml.enrichment_to_metadata.return_value = Mock(
+        tags=["bothell municipal code", "rental homes"]
+    )
+    mock_llml.combine_metadata_tags.return_value = None
+
+    with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml):
+        result = await task.mine()
+
+    assert result == {
+        "tags": ["bothell property management", "rental homes", "bothell municipal code"],
+        "vectors": None,
+    }
 
 
 @pytest.mark.asyncio

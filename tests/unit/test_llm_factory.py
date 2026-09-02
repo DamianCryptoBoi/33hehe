@@ -106,7 +106,11 @@ def test_get_llm_backend_locked_forces_openai_ignoring_explicit_override(mock_fa
 
     assert isinstance(llm, LlmOpenAI)
     assert llm.model == "gpt-5.2"
-    mock_openai_client.assert_called_once_with(api_key="test-key")
+    mock_openai_client.assert_called_once_with(
+        api_key="test-key",
+        timeout=10.0,
+        max_retries=0,
+    )
 
 
 @patch("conversationgenome.llm.llm_openai.OpenAI")
