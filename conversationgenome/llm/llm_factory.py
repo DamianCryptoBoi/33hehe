@@ -75,7 +75,7 @@ def get_llm_backend(llm_type_override=None, request_timeout=None) -> LlmLib:
 
     elif llm_type_override == "vertex":
         from .llm_vertex import LlmVertex
-        return LlmVertex()
+        return LlmVertex(request_timeout=request_timeout)
 
     else:
         raise ValueError(f"Unsupported LLM_PROVIDER: {llm_type_override}")

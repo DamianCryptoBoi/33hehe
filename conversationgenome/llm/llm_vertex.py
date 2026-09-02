@@ -5,7 +5,7 @@ from google.auth import default as google_auth_default
 from google.auth.transport.requests import AuthorizedSession
 
 from conversationgenome.ConfigLib import c
-from conversationgenome.llm.LlmLib import LlmLib, reasoning_effort_override
+from conversationgenome.llm.LlmLib import LlmLib
 
 
 DEFAULT_MODEL = "gemini-3.6-flash"
@@ -15,7 +15,7 @@ SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 
 class LlmVertex(LlmLib):
-    def __init__(self):
+    def __init__(self, request_timeout: float | None = None):
         credentials, adc_project = google_auth_default(scopes=SCOPES)
         self.project = c.get("env", "GOOGLE_CLOUD_PROJECT", adc_project)
         if not self.project:
@@ -29,6 +29,9 @@ class LlmVertex(LlmLib):
         self.reasoning_effort = "MINIMAL"
         self.embedding_model = c.get(
             "env", "VERTEX_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
+        )
+        self.request_timeout = (
+            request_timeout if request_timeout is not None else REQUEST_TIMEOUT_SECONDS
         )
         self.client = AuthorizedSession(credentials)
 
@@ -64,7 +67,7 @@ class LlmVertex(LlmLib):
                         ],
                         "generationConfig": generation_config,
                     },
-                    timeout=REQUEST_TIMEOUT_SECONDS,
+                    timeout=self.request_timeout,
                 )
                 response.raise_for_status()
                 parts = response.json()["candidates"][0]["content"]["parts"]
@@ -107,26 +110,10 @@ class LlmVertex(LlmLib):
                     ],
                     "parameters": {"outputDimensionality": dimensions},
                 },
-                timeout=REQUEST_TIMEOUT_SECONDS,
+                timeout=self.request_timeout,
             )
             response.raise_for_status()
             return response.json()["predictions"][0]["embeddings"]["values"]
         except Exception:
             print("Vertex Embedding Error")
             return None
-
-    @reasoning_effort_override("LOW")
-    def skill_request_to_skill(self, seed, section_map):
-        return super().skill_request_to_skill(seed, section_map)
-
-    @reasoning_effort_override("LOW")
-    def skill_request_to_skill_bundle(self, seed, section_map):
-        return super().skill_request_to_skill_bundle(seed, section_map)
-
-    @reasoning_effort_override("LOW")
-    def skill_to_tdd_plan(self, skill_markdown, section_map):
-        return super().skill_to_tdd_plan(skill_markdown, section_map)
-
-    @reasoning_effort_override("LOW")
-    def skill_to_section_tests(self, skill_markdown, tdd_plan, section_map):
-        return super().skill_to_section_tests(skill_markdown, tdd_plan, section_map)
