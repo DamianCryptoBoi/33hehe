@@ -1,15 +1,18 @@
 {
-  "default": {
-    "provider": "vertex",
-    "model": "gemini-3.8-flash",
-    "reasoning_effort": "low"
-  },
-  "tasks": {
-    "conversation_tagging": {
-      "provider": "openai",
-      "base_url": "https://api.xah.io/v1",
-      "model": "gpt-5.4",
-      "reasoning_effort": "none"
-    }
-  }
+	"default": {
+		"conversation_tagging": {
+			"provider": "openai",
+			"base_url": "https://api.xah.io/v1",
+			"model": "gpt-5.4",
+			"reasoning_effort": "none"
+		}
+	},
+	"tasks": {
+		"conversation_tagging": {
+			"provider": "openai",
+			"base_url": "https://api.xah.io/v1",
+			"model": "gpt-5.4",
+			"reasoning_effort": "none"
+		}
+	}
 }
