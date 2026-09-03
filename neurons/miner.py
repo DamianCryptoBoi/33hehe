@@ -25,6 +25,7 @@ import bittensor as bt
 
 from conversationgenome.base.miner import BaseMinerNeuron
 from conversationgenome.ConfigLib import c
+from conversationgenome.llm.llm_factory import check_miner_llm_backends
 from conversationgenome.miner.MinerLib import MinerLib
 from conversationgenome.miner.tracking import RequestTracker
 from conversationgenome.protocol import CgSynapse
@@ -202,6 +203,7 @@ class Miner(BaseMinerNeuron):
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
+    check_miner_llm_backends()
     with Miner() as miner:
         while True:
             time.sleep(5)

@@ -63,7 +63,7 @@ class ConversationTaggingTask(Task):
     async def mine(self) -> dict[str, list]:
         started_at = time.monotonic()
         request_timeout = max(self.timeout - 2, 0.01)
-        llml = get_llm_backend(request_timeout=request_timeout)
+        llml = get_llm_backend(task_type=self.type, request_timeout=request_timeout)
 
         try:
             conversation = Conversation(

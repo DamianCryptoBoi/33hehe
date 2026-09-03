@@ -73,7 +73,9 @@ async def test_mine_returns_skill_plan_and_section_tests(monkeypatch):
     assert result["tdd_plan"] == "Verify each stage independently."
     assert result["section_tests"]["s1"] == [{"name": "test_lowercases", "description": "slugify lowercases input", "assertion": "slugify('Hello World') == 'hello-world'"}]
     assert result["section_tests"]["s2"] == [{"name": "test_empty_input", "description": "slugify handles empty input", "assertion": "slugify('') == 'n-a'"}]
-    mock_get_llm.assert_called_once_with(request_timeout=22)
+    mock_get_llm.assert_called_once_with(
+        task_type="skill_coverage_evaluation", request_timeout=22
+    )
 
     mock_llml.skill_request_to_skill.assert_called_once_with(task.input.data.seed, task.input.data.section_map)
     mock_llml.skill_to_tdd_plan.assert_called_once_with("# Slugify Text\n\nSteps...", task.input.data.section_map)

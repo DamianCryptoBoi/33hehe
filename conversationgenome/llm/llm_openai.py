@@ -13,11 +13,22 @@ TRANSIENT_ERROR_NAMES = {"APIConnectionError", "APITimeoutError", "RateLimitErro
 
 
 class LlmOpenAI(LlmLib):
-    def __init__(self, ignore_model_override: bool = False, request_timeout: float | None = None):
+    def __init__(
+        self,
+        ignore_model_override: bool = False,
+        request_timeout: float | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+        reasoning_effort: str | None = None,
+    ):
         api_key = c.get('env', "OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set. Please set it in the .env file or as an environment variable.")
-        base_url = None if ignore_model_override else c.get('env', "OPENAI_BASE_URL")
+        explicitly_configured = model is not None
+        if ignore_model_override:
+            base_url = None
+        elif not explicitly_configured:
+            base_url = c.get('env', "OPENAI_BASE_URL")
         client_args = {
             "api_key": api_key,
             "timeout": request_timeout if request_timeout is not None else REQUEST_TIMEOUT_SECONDS,
@@ -26,8 +37,14 @@ class LlmOpenAI(LlmLib):
         if base_url:
             client_args["base_url"] = base_url
         self.client = OpenAI(**client_args)
-        self.model = DEFAULT_MODEL if ignore_model_override else c.get('env', "OPENAI_MODEL", DEFAULT_MODEL)
-        self.use_configured_model_only = bool(base_url)
+        if ignore_model_override:
+            self.model = DEFAULT_MODEL
+        elif explicitly_configured:
+            self.model = model
+        else:
+            self.model = c.get('env', "OPENAI_MODEL", DEFAULT_MODEL)
+        self.reasoning_effort = reasoning_effort
+        self.use_configured_model_only = explicitly_configured or bool(base_url)
         self.embedding_model = "text-embedding-3-small"
 
 

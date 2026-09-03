@@ -58,7 +58,9 @@ async def test_mine_returns_expected_tags_and_vectors():
     with patch("conversationgenome.task.WebpageMetadataGenerationTask.get_llm_backend", return_value=mock_llml) as mock_get_llm:
         result = await task.mine()
 
-        mock_get_llm.assert_called_once_with(request_timeout=10)
+        mock_get_llm.assert_called_once_with(
+            task_type="webpage_metadata_generation", request_timeout=10
+        )
         assert result["tags"] == ["webpage", "content", "enrichment", "metadata"]
         assert result["vectors"] is None
         

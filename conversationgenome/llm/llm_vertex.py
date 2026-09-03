@@ -15,7 +15,12 @@ SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 
 class LlmVertex(LlmLib):
-    def __init__(self, request_timeout: float | None = None):
+    def __init__(
+        self,
+        request_timeout: float | None = None,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ):
         credentials, adc_project = google_auth_default(scopes=SCOPES)
         self.project = c.get("env", "GOOGLE_CLOUD_PROJECT", adc_project)
         if not self.project:
@@ -25,8 +30,8 @@ class LlmVertex(LlmLib):
             )
 
         self.location = c.get("env", "GOOGLE_CLOUD_LOCATION", "global")
-        self.model = c.get("env", "VERTEX_MODEL", DEFAULT_MODEL)
-        self.reasoning_effort = "LOW"
+        self.model = model or c.get("env", "VERTEX_MODEL", DEFAULT_MODEL)
+        self.reasoning_effort = (reasoning_effort or "LOW").upper()
         self.embedding_model = c.get(
             "env", "VERTEX_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
         )

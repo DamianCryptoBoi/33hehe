@@ -110,14 +110,31 @@ nano .env
 
 **Please follow all instructions in the .env**
 
-LLM utilization is required in this subnet to annotate raw data. As a miner or validator, GPT-4o is the default LLM used for all operations. If you wish to override this default selection, you can follow override instructions below or in your `.env` file. After completing the steps in [Configuration](#Configuration), you can open up your `.env` file, and view the options. Currently, we offer out-of-the-box configuration for OpenAI, Anthropic, Groq, OpenRouter, Chutes, and Google Vertex AI.
+LLM utilization is required in this subnet to annotate raw data. Validators and legacy non-routed calls use the global LLM settings described below; miners use task-specific routing. The supported providers are OpenAI, Anthropic, Groq, OpenRouter, Chutes, and Google Vertex AI.
 
-To change the default OpenAI Model used by your miner or validator, you first must uncomment `LLM_TYPE_OVERRIDE=openai` and the select your model using the `OPENAI_MODEL` parameter in the .env:
+#### Task-specific miner routing
+
+Miners load `miner_llm_config.json` from the repository root. Its `default`
+route handles every task without an explicit entry under `tasks`. Provider
+credentials remain outside the JSON file: OpenAI-compatible routes use
+`OPENAI_API_KEY`, while Vertex uses Google Application Default Credentials.
+
+The included configuration sends `conversation_tagging` to the OpenAI-compatible
+endpoint at `https://api.xah.io/v1` with `gpt-5.4` and no reasoning, and sends
+all other miner tasks to Vertex `gemini-3.8-flash` with low reasoning. Set
+`MINER_LLM_CONFIG` only if the JSON file lives outside the repository root.
+
+At startup the miner makes one small generation request for each unique route.
+It exits before opening its axon if a credential, endpoint, or configured model
+does not work. API keys must not be added to `miner_llm_config.json`.
+
+To change the global OpenAI model used by a validator or a legacy non-routed call, uncomment `LLM_TYPE_OVERRIDE=openai` and select the model using `OPENAI_MODEL` in `.env`:
 
 ```
 # ____________ OpenAI Configuration: ________________
-# OpenAI is the default LLM provider for all miner and validator operations, utilizing GPT-4o.
-# To override your OpenAI model choice, uncomment the line below, then proceed to selecting a model. For other override options, see "Select LLM Override" below.
+# OpenAI is the default provider for validators and legacy non-routed calls.
+# Miners use miner_llm_config.json.
+# To override the global model, uncomment the line below and select a model.
 #export LLM_TYPE_OVERRIDE=openai
 
 Enter a model below. See all options at: https://platform.openai.com/docs/models
@@ -149,11 +166,14 @@ export OPENROUTER_MODEL=deepseek/deepseek-chat
 export OPENROUTER_PROVIDER_PREFERENCE=chutes
 ```
 
-#### OpenAI-Compatible API Configuration
+#### Global OpenAI-Compatible API Configuration
 
-The stock OpenAI miner can use any OpenAI-compatible chat-completions endpoint.
+The legacy global OpenAI backend can use any OpenAI-compatible chat-completions endpoint.
 When `OPENAI_BASE_URL` is set, all task-specific model, reasoning-effort, and
 service-tier overrides are disabled so every request uses `OPENAI_MODEL`.
+
+For the task-routed miner, put `base_url`, `model`, and `reasoning_effort` in
+`miner_llm_config.json` instead.
 
 ```
 export LLM_TYPE_OVERRIDE=openai

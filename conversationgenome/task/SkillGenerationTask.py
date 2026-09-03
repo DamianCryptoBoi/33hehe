@@ -27,7 +27,7 @@ class SkillGenerationTask(Task):
     input: Optional[SkillTaskInput] = None
 
     async def mine(self) -> dict[str, list]:
-        llml = get_llm_backend(request_timeout=self.timeout - 2)
+        llml = get_llm_backend(task_type=self.type, request_timeout=self.timeout - 2)
 
         try:
             calls = [
