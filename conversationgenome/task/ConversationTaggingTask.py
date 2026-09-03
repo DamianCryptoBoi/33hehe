@@ -63,16 +63,7 @@ class ConversationTaggingTask(Task):
     async def mine(self) -> dict[str, list]:
         started_at = time.monotonic()
         request_timeout = max(self.timeout - 2, 0.01)
-        try:
-            llml = get_llm_backend(
-                llm_type_override="openai",
-                request_timeout=request_timeout,
-            )
-        except ValueError as error:
-            bt.logging.warning(
-                f"GPT-5.2 unavailable for conversation tagging; using configured backend: {error}"
-            )
-            llml = get_llm_backend(request_timeout=request_timeout)
+        llml = get_llm_backend(request_timeout=request_timeout)
 
         try:
             conversation = Conversation(

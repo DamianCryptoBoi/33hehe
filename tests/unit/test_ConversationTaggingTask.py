@@ -1,6 +1,6 @@
 import threading
 import time
-from unittest.mock import MagicMock, Mock, call
+from unittest.mock import MagicMock, Mock
 from unittest.mock import patch
 
 import pytest
@@ -21,10 +21,7 @@ async def test_mine_returns_expected_tags_and_vectors():
 
         result = await task.mine()
 
-        mock_get_llm.assert_called_once_with(
-            llm_type_override="openai",
-            request_timeout=10,
-        )
+        mock_get_llm.assert_called_once_with(request_timeout=10)
         assert result["tags"] == ["greeting"]
         assert result["vectors"] == [[0.1, 0.2]]
         call_kwargs = mock_llml.conversation_to_metadata.call_args.kwargs
@@ -176,27 +173,6 @@ async def test_mine_returns_fallback_before_slow_combiner_uses_task_deadline():
     assert elapsed < 0.1
     assert result["tags"] != ["too late"]
     assert len(result["tags"]) == 16
-
-
-@pytest.mark.asyncio
-async def test_mine_falls_back_to_configured_backend_when_openai_is_unavailable():
-    mock_llml = MagicMock()
-    mock_llml.conversation_to_metadata.return_value = Mock(
-        tags=["conversation topic"], vectors=None
-    )
-
-    with patch(
-        "conversationgenome.task.ConversationTaggingTask.get_llm_backend",
-        side_effect=[ValueError("OPENAI_API_KEY missing"), mock_llml],
-    ) as mock_get_llm:
-        task = DummyData.conversation_tagging_task()
-        result = await task.mine()
-
-    assert result == {"tags": ["conversation topic"], "vectors": None}
-    assert mock_get_llm.call_args_list == [
-        call(llm_type_override="openai", request_timeout=10),
-        call(request_timeout=10),
-    ]
 
 
 @pytest.mark.asyncio
