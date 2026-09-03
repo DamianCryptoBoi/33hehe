@@ -1,6 +1,6 @@
 import threading
 import time
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, call
 from unittest.mock import patch
 
 import pytest
@@ -21,7 +21,10 @@ async def test_mine_returns_expected_tags_and_vectors():
 
         result = await task.mine()
 
-        mock_get_llm.assert_called_once_with(request_timeout=10)
+        mock_get_llm.assert_called_once_with(
+            llm_type_override="openai",
+            request_timeout=10,
+        )
         assert result["tags"] == ["greeting"]
         assert result["vectors"] == [[0.1, 0.2]]
         call_kwargs = mock_llml.conversation_to_metadata.call_args.kwargs
@@ -80,12 +83,17 @@ async def test_mine_handles_exception_from_llmlib_raises_error():
 
 
 @pytest.mark.asyncio
-async def test_mine_uses_validator_aligned_enrichment_and_merges_locally():
+async def test_mine_uses_validator_aligned_enrichment_and_combines_metadata():
     mock_llml = MagicMock()
     primary_result = Mock(tags=["east german military"], vectors=None)
     enrichment_result = Mock(tags=["united states congress"], vectors=None)
+    combined_result = Mock(
+        tags=["east german military", "united states congress"],
+        vectors=None,
+    )
     mock_llml.conversation_to_metadata.return_value = primary_result
     mock_llml.enrichment_to_metadata.return_value = enrichment_result
+    mock_llml.combine_metadata_tags.return_value = combined_result
 
     with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
         task = DummyData.conversation_tagging_task()
@@ -100,7 +108,10 @@ async def test_mine_uses_validator_aligned_enrichment_and_merges_locally():
         validator_aligned=True,
     )
     mock_llml.combine_named_entities.assert_not_called()
-    mock_llml.combine_metadata_tags.assert_not_called()
+    mock_llml.combine_metadata_tags.assert_called_once_with(
+        [["east german military"], ["united states congress"]],
+        generateEmbeddings=False,
+    )
     assert result == {
         "tags": ["east german military", "united states congress"],
         "vectors": None,
@@ -108,24 +119,84 @@ async def test_mine_uses_validator_aligned_enrichment_and_merges_locally():
 
 
 @pytest.mark.asyncio
-async def test_mine_preserves_all_extracted_tags_without_combination():
+async def test_mine_uses_balanced_sixteen_tag_fallback_when_combination_fails():
     mock_llml = MagicMock()
     mock_llml.conversation_to_metadata.return_value = Mock(
-        tags=["east german military", "bernd schwipper"], vectors=None
+        tags=[f"primary {idx}" for idx in range(14)], vectors=None
     )
-    mock_llml.enrichment_to_metadata.return_value = Mock(
-        tags=["united states congress", "bernd schwipper"], vectors=None
-    )
+    mock_llml.enrichment_to_metadata.side_effect = [
+        Mock(tags=[f"first enrichment {idx}" for idx in range(5)], vectors=None),
+        Mock(tags=[f"second enrichment {idx}" for idx in range(5)], vectors=None),
+    ]
+    mock_llml.combine_metadata_tags.return_value = None
     with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
         task = DummyData.conversation_tagging_task()
-        task.input.data.enrichment_lines = [(0, "United States Congress")]
+        task.input.data.enrichment_lines = [(0, "First"), (1, "Second")]
         result = await task.mine()
 
     assert result == {
-        "tags": ["east german military", "bernd schwipper", "united states congress"],
+        "tags": [
+            *(f"primary {idx}" for idx in range(10)),
+            "first enrichment 0",
+            "second enrichment 0",
+            "first enrichment 1",
+            "second enrichment 1",
+            "first enrichment 2",
+            "second enrichment 2",
+        ],
         "vectors": None,
     }
     mock_llml.combine_named_entities.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mine_returns_fallback_before_slow_combiner_uses_task_deadline():
+    mock_llml = MagicMock()
+    mock_llml.conversation_to_metadata.return_value = Mock(
+        tags=[f"primary {idx}" for idx in range(12)], vectors=None
+    )
+    mock_llml.enrichment_to_metadata.return_value = Mock(
+        tags=[f"enrichment {idx}" for idx in range(8)], vectors=None
+    )
+
+    def slow_combiner(*_args, **_kwargs):
+        time.sleep(0.2)
+        return Mock(tags=["too late"], vectors=None)
+
+    mock_llml.combine_metadata_tags.side_effect = slow_combiner
+
+    with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
+        task = DummyData.conversation_tagging_task()
+        task.timeout = 0.05
+        task.input.data.enrichment_lines = [(0, "Enrichment")]
+        started_at = time.monotonic()
+        result = await task.mine()
+        elapsed = time.monotonic() - started_at
+
+    assert elapsed < 0.1
+    assert result["tags"] != ["too late"]
+    assert len(result["tags"]) == 16
+
+
+@pytest.mark.asyncio
+async def test_mine_falls_back_to_configured_backend_when_openai_is_unavailable():
+    mock_llml = MagicMock()
+    mock_llml.conversation_to_metadata.return_value = Mock(
+        tags=["conversation topic"], vectors=None
+    )
+
+    with patch(
+        "conversationgenome.task.ConversationTaggingTask.get_llm_backend",
+        side_effect=[ValueError("OPENAI_API_KEY missing"), mock_llml],
+    ) as mock_get_llm:
+        task = DummyData.conversation_tagging_task()
+        result = await task.mine()
+
+    assert result == {"tags": ["conversation topic"], "vectors": None}
+    assert mock_get_llm.call_args_list == [
+        call(llm_type_override="openai", request_timeout=10),
+        call(request_timeout=10),
+    ]
 
 
 @pytest.mark.asyncio

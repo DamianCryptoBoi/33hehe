@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import List
 from typing import Literal
 from typing import Optional
@@ -10,6 +11,35 @@ from pydantic import BaseModel
 from conversationgenome.api.models.conversation import Conversation
 from conversationgenome.llm.llm_factory import get_llm_backend
 from conversationgenome.task.Task import Task
+
+
+def _balanced_fallback(tag_sets: list[list[str]], limit: int = 16) -> list[str]:
+    if not tag_sets:
+        return []
+
+    output = list(dict.fromkeys(tag_sets[0]))[:10]
+    seen = set(output)
+    enrichment_sets = tag_sets[1:]
+    enrichment_idx = 0
+
+    while len(output) < limit and any(
+        enrichment_idx < len(tags) for tags in enrichment_sets
+    ):
+        for tags in enrichment_sets:
+            if enrichment_idx < len(tags) and tags[enrichment_idx] not in seen:
+                output.append(tags[enrichment_idx])
+                seen.add(tags[enrichment_idx])
+                if len(output) == limit:
+                    return output
+        enrichment_idx += 1
+
+    for tag in tag_sets[0][10:]:
+        if tag not in seen:
+            output.append(tag)
+            seen.add(tag)
+            if len(output) == limit:
+                break
+    return output
 
 
 class ConversationTaskInputData(BaseModel):
@@ -31,7 +61,18 @@ class ConversationTaggingTask(Task):
     input: Optional[ConversationTaskInput] = None
 
     async def mine(self) -> dict[str, list]:
-        llml = get_llm_backend(request_timeout=self.timeout - 2)
+        started_at = time.monotonic()
+        request_timeout = max(self.timeout - 2, 0.01)
+        try:
+            llml = get_llm_backend(
+                llm_type_override="openai",
+                request_timeout=request_timeout,
+            )
+        except ValueError as error:
+            bt.logging.warning(
+                f"GPT-5.2 unavailable for conversation tagging; using configured backend: {error}"
+            )
+            llml = get_llm_backend(request_timeout=request_timeout)
 
         try:
             conversation = Conversation(
@@ -72,10 +113,32 @@ class ConversationTaggingTask(Task):
             if not all_tags:
                 return {"tags": [], "vectors": None}
 
-            output = {
-                "tags": list(dict.fromkeys(tag for tags in all_tags for tag in tags))[:20],
-                "vectors": None,
-            }
+            fallback_tags = _balanced_fallback(all_tags)
+            response_margin = min(1.5, self.timeout / 2)
+            remaining = self.timeout - response_margin - (time.monotonic() - started_at)
+            if remaining > 0:
+                try:
+                    combined_result = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            llml.combine_metadata_tags,
+                            all_tags,
+                            generateEmbeddings=False,
+                        ),
+                        timeout=remaining,
+                    )
+                    if combined_result and combined_result.tags:
+                        return {
+                            "tags": combined_result.tags[:20],
+                            "vectors": combined_result.vectors,
+                        }
+                except TimeoutError:
+                    bt.logging.warning("Metadata combination timed out; using fallback tags")
+                except Exception as error:
+                    bt.logging.warning(
+                        f"Metadata combination failed; using fallback tags: {error}"
+                    )
+
+            output = {"tags": fallback_tags, "vectors": None}
         except Exception as e:
             bt.logging.error(f"Error during mining: {e}")
             raise e
