@@ -22,7 +22,7 @@ async def test_mine_returns_expected_tags_and_vectors():
         result = await task.mine()
 
         mock_get_llm.assert_called_once_with(
-            task_type="conversation_tagging", request_timeout=10
+            task_type="conversation_tagging", request_timeout=11
         )
         assert result["tags"] == ["greeting"]
         assert result["vectors"] == [[0.1, 0.2]]

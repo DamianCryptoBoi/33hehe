@@ -27,7 +27,7 @@ class WebpageMetadataGenerationTask(Task):
     input: Optional[WebpageMarkdownTaskInput] = None
 
     async def mine(self) -> dict[str, list]:
-        llml = get_llm_backend(task_type=self.type, request_timeout=self.timeout - 2)
+        llml = get_llm_backend(task_type=self.type, request_timeout=self.timeout - 1)
 
         try:
             if not self.input.data.window:

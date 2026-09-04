@@ -40,7 +40,7 @@ async def test_mine_returns_expected_tags():
         result = await task.mine()
 
         mock_get_llm.assert_called_once_with(
-            task_type="named_entities_extraction", request_timeout=10
+            task_type="named_entities_extraction", request_timeout=11
         )
         assert result["tags"] == ["John Smith", "Apple Inc", "New York"]
         # Verify the transcript was constructed correctly

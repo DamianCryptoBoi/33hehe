@@ -54,7 +54,7 @@ async def test_mine_returns_tags_and_vectors():
         result = await task.mine()
 
     mock_get_llm.assert_called_once_with(
-        task_type="skill_generation", request_timeout=10
+        task_type="skill_generation", request_timeout=11
     )
     assert result["tags"] == ["docx", "parsing"]
     assert result["vectors"] is None

@@ -59,7 +59,7 @@ async def test_mine_returns_expected_tags_and_vectors():
         result = await task.mine()
 
         mock_get_llm.assert_called_once_with(
-            task_type="webpage_metadata_generation", request_timeout=10
+            task_type="webpage_metadata_generation", request_timeout=11
         )
         assert result["tags"] == ["webpage", "content", "enrichment", "metadata"]
         assert result["vectors"] is None
