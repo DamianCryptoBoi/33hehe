@@ -216,10 +216,72 @@ def test_fetch_wandb_scores_filters_recycled_uid(monkeypatch):
     assert rows == [
         {
             "validator_uid": 70,
+            "miner_uid": 36,
+            "miner_hotkey": "miner-hotkey",
             "wandb_run": "run-70",
             "task_id": "ours",
             "adjusted_score": 0.64,
             "final_score": 0.61,
+            "score_timestamp": 150.0,
+        }
+    ]
+
+
+def test_fetch_wandb_scores_can_analyze_uid_without_hotkey(monkeypatch):
+    tracking = _tracking_module()
+    responses = iter(
+        [
+            {
+                "project": {
+                    "runs": {
+                        "edges": [
+                            {
+                                "node": {
+                                    "name": "run-70",
+                                    "displayName": "cgp/validator-70-2.38.75-123000",
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "project": {
+                    "run": {
+                        "sampledHistory": [
+                            [
+                                {
+                                    "_timestamp": 150.0,
+                                    "task_id.73": "task-1",
+                                    "hotkey.73": "historical-hotkey",
+                                    "adjusted_score.73": 0.5,
+                                    "final_miner_score.73": 0.4,
+                                }
+                            ]
+                        ]
+                    }
+                }
+            },
+        ]
+    )
+    monkeypatch.setattr(tracking, "_graphql", lambda *args, **kwargs: next(responses))
+
+    rows = tracking.fetch_wandb_score_rows(
+        miner_uid=73,
+        miner_hotkey=None,
+        validator_uids=None,
+        since_timestamp=100.0,
+    )
+
+    assert rows == [
+        {
+            "validator_uid": 70,
+            "miner_uid": 73,
+            "miner_hotkey": "historical-hotkey",
+            "wandb_run": "run-70",
+            "task_id": "task-1",
+            "adjusted_score": 0.5,
+            "final_score": 0.4,
             "score_timestamp": 150.0,
         }
     ]
@@ -271,3 +333,32 @@ def test_wandb_run_selection_keeps_window_and_one_boundary_run():
         (70, "boundary-70"),
         (78, "current-78"),
     ]
+
+
+def test_wandb_run_selection_filters_other_subnets():
+    tracking = _tracking_module()
+    run_nodes = [
+        {
+            "node": {
+                "name": "mainnet",
+                "displayName": "cgp/validator-70-2.38.75-1700000200000",
+                "config": '{"netuid":{"value":33}}',
+            }
+        },
+        {
+            "node": {
+                "name": "testnet",
+                "displayName": "cgp/validator-70-2.38.75-1700000300000",
+                "config": '{"netuid":{"value":138}}',
+            }
+        },
+    ]
+
+    selected = tracking._select_validator_runs(
+        run_nodes,
+        validator_uids=None,
+        since_timestamp=1_700_000_000,
+        netuid=33,
+    )
+
+    assert selected == [(70, "mainnet")]

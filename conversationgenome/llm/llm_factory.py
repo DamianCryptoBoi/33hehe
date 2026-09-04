@@ -7,6 +7,7 @@ from conversationgenome.ConfigLib import c
 from conversationgenome.llm.LlmLib import LlmLib
 
 LOCKED_LLM_TYPE = "openai"
+OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MINER_LLM_CONFIG_PATH = Path(__file__).resolve().parents[2] / "miner_llm_config.json"
 MINER_TASK_TYPES = {
     "conversation_tagging",
@@ -151,7 +152,9 @@ def _create_llm_backend(llm_type: str, request_timeout=None, route=None) -> LlmL
         return LlmOpenAI(
             request_timeout=request_timeout,
             model=model,
-            base_url=route.get("base_url"),
+            base_url=(route.get("base_url") or OPENAI_DEFAULT_BASE_URL)
+            if route
+            else None,
             reasoning_effort=reasoning_effort,
         )
     if llm_type == "anthropic":

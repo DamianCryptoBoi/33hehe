@@ -213,6 +213,34 @@ def test_conversation_route_uses_configured_openai_endpoint(mock_openai, monkeyp
     )
 
 
+@patch("conversationgenome.llm.llm_openai.OpenAI")
+@pytest.mark.parametrize("route_extra", [{}, {"base_url": None}], ids=["omitted", "null"])
+def test_openai_route_without_base_url_uses_official_endpoint(
+    mock_openai, monkeypatch, tmp_path, route_extra
+):
+    config = {
+        "default": {
+            "provider": "openai",
+            "model": "gpt-5.4",
+            "reasoning_effort": "none",
+            **route_extra,
+        }
+    }
+    config_path = _write_miner_llm_config(tmp_path, config)
+    monkeypatch.setenv("MINER_LLM_CONFIG", str(config_path))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://invalid.example/v1")
+
+    get_llm_backend(task_type="survey_tagging", request_timeout=10)
+
+    mock_openai.assert_called_once_with(
+        api_key="test-key",
+        base_url="https://api.openai.com/v1",
+        timeout=10,
+        max_retries=0,
+    )
+
+
 def test_other_task_route_uses_configured_vertex_model(monkeypatch, tmp_path):
     config_path = _write_miner_llm_config(tmp_path)
     monkeypatch.setenv("MINER_LLM_CONFIG", str(config_path))

@@ -282,7 +282,7 @@ def _graphql(endpoint, query, variables):
     return payload["data"]
 
 
-def _select_validator_runs(run_nodes, validator_uids, since_timestamp):
+def _select_validator_runs(run_nodes, validator_uids, since_timestamp, netuid=None):
     candidates = []
     for index, edge in enumerate(run_nodes):
         run = edge["node"]
@@ -291,7 +291,14 @@ def _select_validator_runs(run_nodes, validator_uids, since_timestamp):
         if not validator_match:
             continue
         validator_uid = int(validator_match.group(1))
-        if validator_uid not in validator_uids:
+        if validator_uids is not None and validator_uid not in validator_uids:
+            continue
+        try:
+            run_config = json.loads(run.get("config") or "{}")
+            run_netuid = run_config.get("netuid", {}).get("value")
+        except (AttributeError, TypeError, ValueError):
+            run_netuid = None
+        if netuid is not None and run_netuid is not None and run_netuid != netuid:
             continue
         timestamp_match = re.search(r"-(\d{13})$", display_name)
         started_at = int(timestamp_match.group(1)) / 1000 if timestamp_match else None
@@ -322,6 +329,7 @@ def fetch_wandb_score_rows(
     miner_uid,
     validator_uids,
     since_timestamp,
+    netuid=33,
     entity="afterparty",
     project="conversationgenome",
     endpoint="https://api.wandb.ai/graphql",
@@ -329,7 +337,7 @@ def fetch_wandb_score_rows(
     runs_query = """
     query Runs($project: String!, $entity: String!, $first: Int!) {
       project(name: $project, entityName: $entity) {
-        runs(first: $first) { edges { node { name displayName } } }
+        runs(first: $first) { edges { node { name displayName config } } }
       }
     }
     """
@@ -343,6 +351,7 @@ def fetch_wandb_score_rows(
         run_nodes,
         validator_uids=validator_uids,
         since_timestamp=since_timestamp,
+        netuid=netuid,
     )
 
     history_query = """
@@ -384,15 +393,18 @@ def fetch_wandb_score_rows(
         for row in rows:
             timestamp = row.get("_timestamp")
             task_id = row.get(f"task_id.{uid}")
+            hotkey = row.get(f"hotkey.{uid}")
             if (
                 timestamp is None
                 or timestamp < since_timestamp
                 or not task_id
-                or row.get(f"hotkey.{uid}") != miner_hotkey
+                or (miner_hotkey is not None and hotkey != miner_hotkey)
             ):
                 continue
             scores[(validator_uid, task_id)] = {
                 "validator_uid": validator_uid,
+                "miner_uid": uid,
+                "miner_hotkey": hotkey,
                 "wandb_run": run_name,
                 "task_id": task_id,
                 "adjusted_score": row.get(f"adjusted_score.{uid}"),

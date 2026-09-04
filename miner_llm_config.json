@@ -1,18 +1,13 @@
 {
-	"default": {
-		"conversation_tagging": {
-			"provider": "openai",
-			"base_url": "https://api.xah.io/v1",
-			"model": "gpt-5.4",
-			"reasoning_effort": "none"
-		}
-	},
-	"tasks": {
-		"conversation_tagging": {
-			"provider": "openai",
-			"base_url": "https://api.xah.io/v1",
-			"model": "gpt-5.4",
-			"reasoning_effort": "none"
-		}
-	}
+  "default": {
+    "provider": "openai",
+    "model": "gpt-5.2"
+  },
+  "tasks": {
+    "skill_coverage_evaluation": {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "low"
+    }
+  }
 }

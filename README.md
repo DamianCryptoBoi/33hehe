@@ -119,14 +119,29 @@ route handles every task without an explicit entry under `tasks`. Provider
 credentials remain outside the JSON file: OpenAI-compatible routes use
 `OPENAI_API_KEY`, while Vertex uses Google Application Default Credentials.
 
-The included configuration sends `conversation_tagging` to the OpenAI-compatible
-endpoint at `https://api.xah.io/v1` with `gpt-5.4` and no reasoning, and sends
-all other miner tasks to Vertex `gemini-3.8-flash` with low reasoning. Set
+The included configuration sends `conversation_tagging` to OpenAI `gpt-5.2`
+with no reasoning, and sends all other miner tasks to OpenAI `gpt-5.4` with no
+reasoning. Omitting `base_url` selects the official OpenAI endpoint. Set
 `MINER_LLM_CONFIG` only if the JSON file lives outside the repository root.
 
 At startup the miner makes one small generation request for each unique route.
 It exits before opening its axon if a credential, endpoint, or configured model
 does not work. API keys must not be added to `miner_llm_config.json`.
+
+To verify routing and benchmark every task type through the real miner path,
+place the latest request database at `uid217-miner-requests-latest.sqlite3`
+and run:
+
+```console
+.venv/bin/python -m scripts.benchmark_miner_llm_routes
+```
+
+The benchmark randomly selects five successful saved requests for each task
+type, runs each through its configured provider and model, then prints a table
+with completion counts and minimum, average, and maximum latency. Missing task
+types remain visible in the table instead of using fake data. Pass
+`--samples N` to change the sample count or `--db PATH` to use a different
+database. A mining run may make multiple billable provider calls.
 
 To change the global OpenAI model used by a validator or a legacy non-routed call, uncomment `LLM_TYPE_OVERRIDE=openai` and select the model using `OPENAI_MODEL` in `.env`:
 

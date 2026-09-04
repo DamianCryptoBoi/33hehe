@@ -169,6 +169,7 @@ web/store
 .vscode/
 web/*.sqlite
 *.sqlite
+uid217-miner-requests-latest.sqlite3*
 
 # Reference MCP
 llms_txt_reference_mcp/llms_txt.db

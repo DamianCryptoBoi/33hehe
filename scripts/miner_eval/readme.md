@@ -1,38 +1,31 @@
-# Validator Run Analyzer
+# SN33 UID score analyzer
 
-This script analyzes validator runs for a specific hotkey/UID combination in the ConversationGenome project on Weights & Biases.
+This script reads public ReadyAI validator logs from Weights & Biases and
+summarizes the scores assigned to one SN33 miner UID.
 
-## Prerequisites
+## Setup
 
-- Python 3.7+
-- pip (Python package installer)
+From the repository root, install the project dependencies:
 
-## Installation
-
-1. Clone this repository or download the script.
-2. Install the required packages:
-    `pip install -r requirements.txt`
+```console
+pip install -r requirements.txt
+```
 
 ## Usage
 
-Run the script using Python:
+```console
+python scripts/miner_eval/miner_eval.py --uid 73
+```
 
-`python miner_eval.py [--uid UID] [--hotkey HOTKEY]`
+The default lookback is four hours. Override it when needed:
 
-Arguments:
-- `--uid`: User ID (default: 100)
-- `--hotkey`: Hotkey (default: "5FLosL8CBXx2h4322UStUNoaX4uWLJdwG4Y7uNF3CRAc9H8y")
+```console
+python scripts/miner_eval/miner_eval.py --uid 73 --hours 24
+```
 
-Example:
-python validator_run_analyzer.py --uid 129 --hotkey 5GZXMRGH4QvMMzN4C3eb8G5cvJyGebYaeXhy14cvDEksuXdm
+The report includes final and adjusted score statistics, penalty frequency,
+mean penalty size, per-validator averages, and separate averages for every
+hotkey observed at the UID. The hotkey split is important when a UID was
+deregistered and assigned to another miner during the selected window.
 
-If no arguments are provided, the script will use the default values.
-
-## Output
-
-The script will display:
-- Total number of scores
-- Overall mean score
-- Overall penalty
-- Number and percentage of penalties
-- Mean score per run
+The W&B project is public, so no W&B API key is required.
