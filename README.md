@@ -119,9 +119,12 @@ route handles every task without an explicit entry under `tasks`. Provider
 credentials remain outside the JSON file: OpenAI-compatible routes use
 `OPENAI_API_KEY`, while Vertex uses Google Application Default Credentials.
 
-The included configuration sends `conversation_tagging` to OpenAI `gpt-5.2`
-with no reasoning, and sends all other miner tasks to OpenAI `gpt-5.4` with no
-reasoning. Omitting `base_url` selects the official OpenAI endpoint. Set
+The included configuration uses latency-tested OpenAI routes: `gpt-5.2`/low
+for conversation tagging, `gpt-5.6-sol`/medium for named entities,
+`gpt-5.6-terra`/low for skill coverage, `gpt-5.6-sol`/xhigh for skill
+generation, and `gpt-5.6-sol`/high for webpage metadata. Survey tagging uses
+the default `gpt-5.2` route because the saved benchmark corpus has no survey
+requests. Omitting `base_url` selects the official OpenAI endpoint. Set
 `MINER_LLM_CONFIG` only if the JSON file lives outside the repository root.
 
 At startup the miner makes one small generation request for each unique route.
@@ -136,12 +139,14 @@ and run:
 .venv/bin/python -m scripts.benchmark_miner_llm_routes
 ```
 
-The benchmark randomly selects five successful saved requests for each task
-type, runs each through its configured provider and model, then prints a table
-with completion counts and minimum, average, and maximum latency. Missing task
-types remain visible in the table instead of using fake data. Pass
-`--samples N` to change the sample count or `--db PATH` to use a different
-database. A mining run may make multiple billable provider calls.
+The benchmark reproducibly selects five successful saved requests for each
+task type, runs each through its configured provider and model, then prints
+completion counts, reasoning level, deadlines, minimum/average/p95/maximum
+latency, p05 deadline headroom, and deadline misses. Missing task types remain
+visible instead of using fake data. Pass `--samples N` to change the cohort
+size, `--seed N` to select another reproducible cohort, `--task TYPE` (repeatable)
+to isolate tasks, or `--db PATH` to use a different database. A mining run may
+make multiple billable provider calls.
 
 To change the global OpenAI model used by a validator or a legacy non-routed call, uncomment `LLM_TYPE_OVERRIDE=openai` and select the model using `OPENAI_MODEL` in `.env`:
 
