@@ -82,7 +82,7 @@ async def test_mine_handles_exception_from_llmlib_raises_error():
 
 
 @pytest.mark.asyncio
-async def test_mine_uses_validator_aligned_enrichment_and_combines_metadata():
+async def test_mine_uses_validator_enrichment_prompt_and_combines_metadata():
     mock_llml = MagicMock()
     primary_result = Mock(tags=["east german military"], vectors=None)
     enrichment_result = Mock(tags=["united states congress"], vectors=None)
@@ -104,7 +104,6 @@ async def test_mine_uses_validator_aligned_enrichment_and_combines_metadata():
         "United States Congress and Senate",
         generateEmbeddings=False,
         input_categories=task.input.input_categories,
-        validator_aligned=True,
     )
     mock_llml.combine_named_entities.assert_not_called()
     mock_llml.combine_metadata_tags.assert_called_once_with(
@@ -118,7 +117,29 @@ async def test_mine_uses_validator_aligned_enrichment_and_combines_metadata():
 
 
 @pytest.mark.asyncio
-async def test_mine_uses_balanced_sixteen_tag_fallback_when_combination_fails():
+async def test_mine_keeps_only_fourteen_highest_ranked_combined_tags():
+    mock_llml = MagicMock()
+    mock_llml.conversation_to_metadata.return_value = Mock(
+        tags=["primary"], vectors=None
+    )
+    mock_llml.enrichment_to_metadata.return_value = Mock(
+        tags=["enrichment"], vectors=None
+    )
+    ranked_tags = [f"ranked {idx}" for idx in range(20)]
+    mock_llml.combine_metadata_tags.return_value = Mock(
+        tags=ranked_tags, vectors=None
+    )
+
+    with patch("conversationgenome.task.ConversationTaggingTask.get_llm_backend", return_value=mock_llml):
+        task = DummyData.conversation_tagging_task()
+        task.input.data.enrichment_lines = [(0, "Enrichment")]
+        result = await task.mine()
+
+    assert result["tags"] == ranked_tags[:14]
+
+
+@pytest.mark.asyncio
+async def test_mine_uses_balanced_fourteen_tag_fallback_when_combination_fails():
     mock_llml = MagicMock()
     mock_llml.conversation_to_metadata.return_value = Mock(
         tags=[f"primary {idx}" for idx in range(14)], vectors=None
@@ -140,8 +161,6 @@ async def test_mine_uses_balanced_sixteen_tag_fallback_when_combination_fails():
             "second enrichment 0",
             "first enrichment 1",
             "second enrichment 1",
-            "first enrichment 2",
-            "second enrichment 2",
         ],
         "vectors": None,
     }
@@ -174,7 +193,7 @@ async def test_mine_returns_fallback_before_slow_combiner_uses_task_deadline():
 
     assert elapsed < 0.1
     assert result["tags"] != ["too late"]
-    assert len(result["tags"]) == 16
+    assert len(result["tags"]) == 14
 
 
 @pytest.mark.asyncio

@@ -13,7 +13,7 @@ from conversationgenome.llm.llm_factory import get_llm_backend
 from conversationgenome.task.Task import Task
 
 
-def _balanced_fallback(tag_sets: list[list[str]], limit: int = 16) -> list[str]:
+def _balanced_fallback(tag_sets: list[list[str]], limit: int = 14) -> list[str]:
     if not tag_sets:
         return []
 
@@ -87,7 +87,6 @@ class ConversationTaggingTask(Task):
                     content,
                     generateEmbeddings=False,
                     input_categories=self.input.input_categories,
-                    validator_aligned=True,
                 )
                 for _, content in enrichment_lines
             )
@@ -119,7 +118,7 @@ class ConversationTaggingTask(Task):
                     )
                     if combined_result and combined_result.tags:
                         return {
-                            "tags": combined_result.tags[:20],
+                            "tags": combined_result.tags[:14],
                             "vectors": combined_result.vectors,
                         }
                 except TimeoutError:
